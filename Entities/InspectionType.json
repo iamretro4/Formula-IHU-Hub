@@ -1,0 +1,54 @@
+{
+  "name": "InspectionType",
+  "type": "object",
+  "properties": {
+    "key": {
+      "type": "string",
+      "enum": [
+        "pre",
+        "mechanical",
+        "accumulator",
+        "electrical",
+        "noise",
+        "brake",
+        "tilt",
+        "rain"
+      ],
+      "description": "Unique key for inspection type"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of inspection type"
+    },
+    "duration_minutes": {
+      "type": "number",
+      "description": "Duration in minutes"
+    },
+    "concurrent_slots": {
+      "type": "number",
+      "description": "Number of concurrent slots available"
+    },
+    "is_public": {
+      "type": "boolean",
+      "description": "Available for general booking"
+    },
+    "sort_order": {
+      "type": "number",
+      "description": "Display order"
+    },
+    "prerequisites": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Required inspection keys that must be passed first"
+    }
+  },
+  "required": [
+    "key",
+    "name",
+    "duration_minutes",
+    "concurrent_slots"
+  ],
+  "rls": {}
+}

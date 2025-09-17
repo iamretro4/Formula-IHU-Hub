@@ -1,0 +1,62 @@
+{
+  "name": "TrackSession",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team on track"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceleration",
+        "skidpad",
+        "autocross",
+        "endurance",
+        "efficiency",
+        "practice"
+      ],
+      "description": "Type of session"
+    },
+    "session_type": {
+      "type": "string",
+      "enum": [
+        "entry",
+        "exit"
+      ],
+      "description": "Entry or exit from track"
+    },
+    "marshal_id": {
+      "type": "string",
+      "description": "Marshal who logged the session"
+    },
+    "sector": {
+      "type": "string",
+      "description": "Track sector where logged"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the entry/exit occurred"
+    },
+    "vehicle_number": {
+      "type": "string",
+      "description": "Vehicle number for verification"
+    },
+    "driver_name": {
+      "type": "string",
+      "description": "Driver name for safety tracking"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes from marshal"
+    }
+  },
+  "required": [
+    "team_id",
+    "event_type",
+    "session_type",
+    "marshal_id",
+    "sector"
+  ]
+}

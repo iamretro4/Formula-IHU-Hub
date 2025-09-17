@@ -1,0 +1,45 @@
+{
+  "name": "InspectionResult",
+  "type": "object",
+  "properties": {
+    "booking_id": {
+      "type": "string",
+      "description": "Related booking ID"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ongoing",
+        "passed",
+        "failed"
+      ],
+      "description": "Current inspection status"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When inspection started"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When inspection completed"
+    },
+    "scrutineer_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Scrutineer user IDs conducting inspection"
+    },
+    "overall_note": {
+      "type": "string",
+      "description": "Overall inspection notes"
+    }
+  },
+  "required": [
+    "booking_id",
+    "status"
+  ],
+  "rls": {}
+}

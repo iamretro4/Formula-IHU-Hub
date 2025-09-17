@@ -1,0 +1,55 @@
+{
+  "name": "BusinessPlanScore",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team being scored"
+    },
+    "judge_id": {
+      "type": "string",
+      "description": "Judge providing the score"
+    },
+    "novelty": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 15,
+      "description": "Novelty, Mission, Vision (15 pts)"
+    },
+    "content": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Content & Concept (20 pts)"
+    },
+    "presentation": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Presentation Quality (20 pts)"
+    },
+    "financial": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Financial & Sales (20 pts)"
+    },
+    "total_score": {
+      "type": "number",
+      "description": "Calculated total score (75 pts max)"
+    },
+    "comments": {
+      "type": "string",
+      "description": "Detailed feedback from judge"
+    },
+    "approved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Score approved for team viewing"
+    }
+  },
+  "required": [
+    "team_id",
+    "judge_id"
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "name": "Booking",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team making the booking"
+    },
+    "inspection_type_id": {
+      "type": "string",
+      "description": "Type of inspection"
+    },
+    "date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of inspection"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Start time (HH:mm format)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "End time (HH:mm format)"
+    },
+    "resource_index": {
+      "type": "number",
+      "description": "Resource lane index for concurrent slots"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "upcoming",
+        "ongoing",
+        "passed",
+        "failed",
+        "cancelled"
+      ],
+      "default": "upcoming",
+      "description": "Current booking status"
+    },
+    "is_rescrutineering": {
+      "type": "boolean",
+      "default": false,
+      "description": "Is this a rescrutineering booking"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "User who created the booking"
+    }
+  },
+  "required": [
+    "team_id",
+    "inspection_type_id",
+    "date",
+    "start_time",
+    "end_time",
+    "resource_index"
+  ],
+  "rls": {}
+}

@@ -1,0 +1,76 @@
+{
+  "name": "ExternalTimingData",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team performing the run"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceleration",
+        "skidpad",
+        "autocross",
+        "endurance",
+        "efficiency"
+      ],
+      "description": "Type of dynamic event"
+    },
+    "run_number": {
+      "type": "number",
+      "description": "Run number for this team/event"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Run start timestamp"
+    },
+    "finish_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Run finish timestamp"
+    },
+    "raw_time": {
+      "type": "number",
+      "description": "Raw time in seconds from timing system"
+    },
+    "sector_times": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Individual sector times"
+    },
+    "timing_system_id": {
+      "type": "string",
+      "description": "ID from external timing system"
+    },
+    "processed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Has this data been processed with penalties"
+    },
+    "final_time": {
+      "type": "number",
+      "description": "Final time after penalties applied"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "valid",
+        "DNF",
+        "DSQ",
+        "invalid"
+      ],
+      "default": "valid",
+      "description": "Run status"
+    }
+  },
+  "required": [
+    "team_id",
+    "event_type",
+    "run_number",
+    "raw_time"
+  ]
+}

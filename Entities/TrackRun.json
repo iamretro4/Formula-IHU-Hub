@@ -1,0 +1,108 @@
+{
+  "name": "TrackRun",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team performing the run"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceleration",
+        "skidpad",
+        "autocross",
+        "endurance",
+        "efficiency"
+      ],
+      "description": "Type of dynamic event"
+    },
+    "run_number": {
+      "type": "number",
+      "description": "Run number for this team/event"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "time",
+      "description": "Run start time"
+    },
+    "finish_time": {
+      "type": "string",
+      "format": "time",
+      "description": "Run finish time"
+    },
+    "total_time": {
+      "type": "number",
+      "description": "Total time in seconds"
+    },
+    "penalties": {
+      "type": "number",
+      "default": 0,
+      "description": "Penalty seconds applied"
+    },
+    "final_time": {
+      "type": "number",
+      "description": "Final time including penalties"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "DNF",
+        "DSQ",
+        "DOO",
+        "OOC"
+      ],
+      "default": "completed",
+      "description": "Run completion status"
+    },
+    "incidents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "cone",
+              "off_course",
+              "mechanical",
+              "other"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "penalty": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Incidents during the run"
+    },
+    "marshal_id": {
+      "type": "string",
+      "description": "Marshal who recorded this run"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes from marshal"
+    },
+    "weather_conditions": {
+      "type": "string",
+      "enum": [
+        "dry",
+        "wet",
+        "mixed"
+      ],
+      "default": "dry",
+      "description": "Track conditions"
+    }
+  },
+  "required": [
+    "team_id",
+    "event_type",
+    "run_number",
+    "status"
+  ]
+}

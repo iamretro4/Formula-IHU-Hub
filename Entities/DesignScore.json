@@ -1,0 +1,90 @@
+{
+  "name": "DesignScore",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team being scored"
+    },
+    "judge_id": {
+      "type": "string",
+      "description": "Judge providing the score"
+    },
+    "overall_vehicle_concept": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Overall Vehicle Concept score (20 pts max)"
+    },
+    "software": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Software score (10 pts max)"
+    },
+    "vehicle_performance": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 30,
+      "description": "Vehicle Performance score (30 pts max)"
+    },
+    "mechanical_structural": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 15,
+      "description": "Mechanical/Structural score (15 pts max)"
+    },
+    "tractive_system": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 25,
+      "description": "Tractive System/Powertrain score (25 pts max)"
+    },
+    "lv_electronics": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "LV-Electrics/Electronics score (10 pts max)"
+    },
+    "autonomous_functionality": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 20,
+      "description": "Autonomous Functionality score (20 pts max)"
+    },
+    "driver_interface": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Driver Interface score (10 pts max)"
+    },
+    "engineering_design_report": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 10,
+      "description": "Engineering Design Report score (10 pts max)"
+    },
+    "total_score": {
+      "type": "number",
+      "description": "Calculated total score"
+    },
+    "comments": {
+      "type": "string",
+      "description": "Detailed feedback from judge"
+    },
+    "approved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Score approved for team viewing"
+    },
+    "submitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When score was submitted"
+    }
+  },
+  "required": [
+    "team_id",
+    "judge_id"
+  ]
+}

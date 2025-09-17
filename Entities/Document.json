@@ -1,0 +1,70 @@
+{
+  "name": "Document",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team that uploaded the document"
+    },
+    "document_type": {
+      "type": "string",
+      "enum": [
+        "engineering_design_report",
+        "bom",
+        "cost_report",
+        "business_plan",
+        "technical_drawings",
+        "other"
+      ],
+      "description": "Type of document uploaded"
+    },
+    "file_name": {
+      "type": "string",
+      "description": "Original filename"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "URL to the uploaded file"
+    },
+    "file_size": {
+      "type": "number",
+      "description": "File size in bytes"
+    },
+    "uploaded_by": {
+      "type": "string",
+      "description": "User who uploaded the document"
+    },
+    "upload_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the document was uploaded"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_review",
+        "approved",
+        "rejected",
+        "revision_required"
+      ],
+      "default": "pending_review",
+      "description": "Document review status"
+    },
+    "review_notes": {
+      "type": "string",
+      "description": "Notes from document review"
+    },
+    "version": {
+      "type": "number",
+      "default": 1,
+      "description": "Document version number"
+    }
+  },
+  "required": [
+    "team_id",
+    "document_type",
+    "file_name",
+    "file_url",
+    "uploaded_by"
+  ]
+}

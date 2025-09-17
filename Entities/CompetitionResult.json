@@ -1,0 +1,71 @@
+{
+  "name": "CompetitionResult",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team ID"
+    },
+    "design_score": {
+      "type": "number",
+      "description": "Final Design Event score"
+    },
+    "business_plan_score": {
+      "type": "number",
+      "description": "Final Business Plan score"
+    },
+    "cost_manufacturing_score": {
+      "type": "number",
+      "description": "Final Cost & Manufacturing score"
+    },
+    "acceleration_time": {
+      "type": "number",
+      "description": "Best acceleration time (seconds)"
+    },
+    "skidpad_time": {
+      "type": "number",
+      "description": "Best skidpad time (seconds)"
+    },
+    "autocross_time": {
+      "type": "number",
+      "description": "Best autocross time (seconds)"
+    },
+    "endurance_time": {
+      "type": "number",
+      "description": "Endurance event time (seconds)"
+    },
+    "efficiency_score": {
+      "type": "number",
+      "description": "Efficiency event score"
+    },
+    "total_static_points": {
+      "type": "number",
+      "description": "Combined static event points"
+    },
+    "total_dynamic_points": {
+      "type": "number",
+      "description": "Combined dynamic event points"
+    },
+    "overall_total": {
+      "type": "number",
+      "description": "Total competition points"
+    },
+    "overall_rank": {
+      "type": "number",
+      "description": "Overall competition ranking"
+    },
+    "penalties": {
+      "type": "number",
+      "default": 0,
+      "description": "Total penalty points deducted"
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When results were last calculated"
+    }
+  },
+  "required": [
+    "team_id"
+  ]
+}

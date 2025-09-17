@@ -1,0 +1,74 @@
+{
+  "name": "TrackIncident",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team involved in incident"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceleration",
+        "skidpad",
+        "autocross",
+        "endurance",
+        "efficiency",
+        "practice"
+      ],
+      "description": "Event where incident occurred"
+    },
+    "incident_type": {
+      "type": "string",
+      "enum": [
+        "DOO",
+        "OOC"
+      ],
+      "description": "Down or Out / Off Course"
+    },
+    "marshal_id": {
+      "type": "string",
+      "description": "Marshal who reported the incident"
+    },
+    "sector": {
+      "type": "string",
+      "description": "Track sector where incident occurred"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When incident occurred"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the incident"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "minor",
+        "major",
+        "safety"
+      ],
+      "default": "minor",
+      "description": "Incident severity level"
+    },
+    "penalty_applied": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether penalty was applied"
+    },
+    "resolved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether incident has been resolved"
+    }
+  },
+  "required": [
+    "team_id",
+    "event_type",
+    "incident_type",
+    "marshal_id",
+    "sector"
+  ]
+}

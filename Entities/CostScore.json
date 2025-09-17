@@ -1,0 +1,49 @@
+{
+  "name": "CostScore",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team being scored"
+    },
+    "judge_id": {
+      "type": "string",
+      "description": "Judge providing the score"
+    },
+    "bom_discussion": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 50,
+      "description": "BOM Discussion (50 pts)"
+    },
+    "cost_understanding": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 25,
+      "description": "Cost Understanding (25 pts)"
+    },
+    "real_case": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 25,
+      "description": "Real Case Scenario (25 pts)"
+    },
+    "total_score": {
+      "type": "number",
+      "description": "Calculated total score (100 pts max)"
+    },
+    "comments": {
+      "type": "string",
+      "description": "Detailed feedback from judge"
+    },
+    "approved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Score approved for team viewing"
+    }
+  },
+  "required": [
+    "team_id",
+    "judge_id"
+  ]
+}

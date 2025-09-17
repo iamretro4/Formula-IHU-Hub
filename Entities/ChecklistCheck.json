@@ -1,0 +1,41 @@
+{
+  "name": "ChecklistCheck",
+  "type": "object",
+  "properties": {
+    "inspection_result_id": {
+      "type": "string",
+      "description": "Related inspection result ID"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Checklist template item ID"
+    },
+    "checked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Is this item checked/completed"
+    },
+    "checked_by": {
+      "type": "string",
+      "description": "User ID who checked this item"
+    },
+    "checked_by_name": {
+      "type": "string",
+      "description": "Name of user who checked this item"
+    },
+    "checked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this item was checked"
+    },
+    "note": {
+      "type": "string",
+      "description": "Notes specific to this check item"
+    }
+  },
+  "required": [
+    "inspection_result_id",
+    "template_id"
+  ],
+  "rls": {}
+}

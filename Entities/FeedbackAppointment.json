@@ -1,0 +1,67 @@
+{
+  "name": "FeedbackAppointment",
+  "type": "object",
+  "properties": {
+    "team_id": {
+      "type": "string",
+      "description": "Team booking the appointment"
+    },
+    "judge_id": {
+      "type": "string",
+      "description": "Judge providing feedback"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "design",
+        "business_plan",
+        "cost_manufacturing"
+      ],
+      "description": "Which event the feedback is for"
+    },
+    "appointment_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of feedback appointment"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Appointment start time (HH:mm format)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "Appointment end time (HH:mm format)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "completed",
+        "cancelled",
+        "no_show"
+      ],
+      "default": "scheduled",
+      "description": "Appointment status"
+    },
+    "location": {
+      "type": "string",
+      "description": "Meeting location"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes about the appointment"
+    },
+    "booked_by": {
+      "type": "string",
+      "description": "User who booked the appointment"
+    }
+  },
+  "required": [
+    "team_id",
+    "judge_id",
+    "event_type",
+    "appointment_date",
+    "start_time",
+    "end_time"
+  ]
+}

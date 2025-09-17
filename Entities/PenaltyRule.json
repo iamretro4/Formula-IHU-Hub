@@ -1,0 +1,70 @@
+{
+  "name": "PenaltyRule",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Rule name"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "acceleration",
+        "skidpad",
+        "autocross",
+        "endurance",
+        "efficiency"
+      ],
+      "description": "Which event this rule applies to"
+    },
+    "incident_type": {
+      "type": "string",
+      "enum": [
+        "DOO",
+        "OOC",
+        "cone_hit",
+        "off_course",
+        "mechanical_failure"
+      ],
+      "description": "Type of incident"
+    },
+    "penalty_type": {
+      "type": "string",
+      "enum": [
+        "time_penalty",
+        "point_deduction",
+        "disqualification",
+        "percentage"
+      ],
+      "description": "How penalty is applied"
+    },
+    "penalty_value": {
+      "type": "number",
+      "description": "Penalty amount (seconds, points, or percentage)"
+    },
+    "max_penalties": {
+      "type": "number",
+      "description": "Maximum number of this penalty type before DQ"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Is this rule currently active"
+    },
+    "description": {
+      "type": "string",
+      "description": "Rule description"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Admin who created the rule"
+    }
+  },
+  "required": [
+    "name",
+    "event_type",
+    "incident_type",
+    "penalty_type",
+    "penalty_value"
+  ]
+}

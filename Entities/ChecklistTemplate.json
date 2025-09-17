@@ -1,0 +1,39 @@
+{
+  "name": "ChecklistTemplate",
+  "type": "object",
+  "properties": {
+    "inspection_type_key": {
+      "type": "string",
+      "description": "Inspection type key this template belongs to"
+    },
+    "section": {
+      "type": "string",
+      "description": "Section name (e.g., 'TIRES', 'DRIVER GEAR & SAFETY')"
+    },
+    "item_code": {
+      "type": "string",
+      "description": "Item code from inspection sheet (e.g., '1', '2', '8')"
+    },
+    "description": {
+      "type": "string",
+      "description": "Full item description"
+    },
+    "required": {
+      "type": "boolean",
+      "description": "Is this item required for passing"
+    },
+    "order_index": {
+      "type": "number",
+      "description": "Order within section"
+    }
+  },
+  "required": [
+    "inspection_type_key",
+    "section",
+    "item_code",
+    "description",
+    "required",
+    "order_index"
+  ],
+  "rls": {}
+}

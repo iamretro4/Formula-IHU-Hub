@@ -1,0 +1,74 @@
+{
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "User who performed the action"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email of user who performed the action"
+    },
+    "user_role": {
+      "type": "string",
+      "description": "Role of user who performed the action"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "login",
+        "logout",
+        "create_booking",
+        "update_booking",
+        "start_inspection",
+        "complete_inspection",
+        "submit_score",
+        "approve_score",
+        "upload_document",
+        "approve_document",
+        "log_incident",
+        "assign_role",
+        "export_data"
+      ],
+      "description": "Action performed"
+    },
+    "entity_type": {
+      "type": "string",
+      "description": "Type of entity affected (Booking, Score, Document, etc.)"
+    },
+    "entity_id": {
+      "type": "string",
+      "description": "ID of the affected entity"
+    },
+    "old_values": {
+      "type": "object",
+      "description": "Previous values (for updates)"
+    },
+    "new_values": {
+      "type": "object",
+      "description": "New values (for updates)"
+    },
+    "ip_address": {
+      "type": "string",
+      "description": "IP address of user"
+    },
+    "user_agent": {
+      "type": "string",
+      "description": "Browser/device information"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "User session identifier"
+    },
+    "additional_data": {
+      "type": "object",
+      "description": "Additional context data"
+    }
+  },
+  "required": [
+    "user_id",
+    "action",
+    "entity_type"
+  ]
+}

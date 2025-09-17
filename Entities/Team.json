@@ -1,0 +1,59 @@
+{
+  "name": "Team",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Team/University name"
+    },
+    "code": {
+      "type": "string",
+      "description": "Team code or abbreviation"
+    },
+    "vehicle_number": {
+      "type": "string",
+      "description": "Vehicle competition number"
+    },
+    "vehicle_class": {
+      "type": "string",
+      "enum": [
+        "CV",
+        "EV"
+      ],
+      "description": "Vehicle class - Combustion or Electric",
+      "default": "EV"
+    },
+    "drivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "license_number": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Team drivers information"
+    },
+    "contact_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Team contact email"
+    },
+    "country": {
+      "type": "string",
+      "description": "Team country"
+    },
+    "university": {
+      "type": "string",
+      "description": "University/Institution name"
+    }
+  },
+  "required": [
+    "name",
+    "code"
+  ]
+}

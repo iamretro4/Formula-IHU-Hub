@@ -1,0 +1,69 @@
+{
+  "name": "SystemNotification",
+  "type": "object",
+  "properties": {
+    "recipient_id": {
+      "type": "string",
+      "description": "User ID who should receive the notification"
+    },
+    "recipient_role": {
+      "type": "string",
+      "description": "Role-based notification (e.g., 'admin', 'all_judges')"
+    },
+    "title": {
+      "type": "string",
+      "description": "Notification title"
+    },
+    "message": {
+      "type": "string",
+      "description": "Notification content"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "error",
+        "success",
+        "critical"
+      ],
+      "description": "Notification type"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "score_submitted",
+        "incident_reported",
+        "document_uploaded",
+        "inspection_failed",
+        "system_alert"
+      ],
+      "description": "What triggered this notification"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false,
+      "description": "Has the notification been read"
+    },
+    "read_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When notification was read"
+    },
+    "related_entity_id": {
+      "type": "string",
+      "description": "ID of related entity (team, booking, etc.)"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When notification should expire"
+    }
+  },
+  "required": [
+    "title",
+    "message",
+    "type",
+    "event_type"
+  ]
+}

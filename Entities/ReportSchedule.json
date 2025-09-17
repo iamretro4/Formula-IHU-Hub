@@ -1,0 +1,87 @@
+{
+  "name": "ReportSchedule",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Report name"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "daily_summary",
+        "competition_results",
+        "safety_incidents",
+        "team_progress",
+        "judge_activity",
+        "marshal_logs",
+        "document_status"
+      ],
+      "description": "Type of report"
+    },
+    "schedule": {
+      "type": "string",
+      "enum": [
+        "hourly",
+        "daily",
+        "weekly",
+        "event_end"
+      ],
+      "description": "When to generate the report"
+    },
+    "recipients": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Email addresses to send report to"
+    },
+    "recipient_roles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "User roles to send report to"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "csv",
+        "excel",
+        "html"
+      ],
+      "default": "pdf",
+      "description": "Report output format"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Is this schedule active"
+    },
+    "last_generated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When report was last generated"
+    },
+    "next_generation": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When report should next be generated"
+    },
+    "filters": {
+      "type": "object",
+      "description": "Report filtering criteria"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Admin who created the schedule"
+    }
+  },
+  "required": [
+    "name",
+    "report_type",
+    "schedule",
+    "recipients"
+  ]
+}
