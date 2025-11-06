@@ -30,6 +30,9 @@ type PenaltyRule = {
   active: boolean
   description?: string
   created_at?: string
+  rule_type?: string
+  condition?: any
+  penalty_unit?: string
 }
 
 type TrackIncident = {
@@ -44,6 +47,7 @@ type TrackIncident = {
   action_taken?: string
   coordinates?: unknown
   weather_impact?: string
+  event_type?: string
   team?: { code?: string } | null
 }
 
@@ -92,15 +96,22 @@ export default function PenaltyManagementPage() {
           .order('created_at', { ascending: false })
         setRules(penaltyRules || [])
 
-        // New: fetch from track_incidents with join on teams if needed for team code
+        // Fetch from track_incidents with join on teams
         const { data: trackIncidents } = await supabase
           .from('track_incidents')
           .select(
-            `id, occurred_at, team_id, marshal_id, sector, incident_type, severity, description, action_taken, coordinates, weather_impact, team:teams(code)`
+            `id, occurred_at, team_id, marshal_id, sector, incident_type, severity, description, action_taken, coordinates, weather_impact, event_type, team:teams(code)`
           )
           .order('occurred_at', { ascending: false })
           .limit(10)
-        setIncidents(trackIncidents || [])
+        
+        // Transform the data to match TrackIncident type
+        const transformedIncidents = trackIncidents?.map(incident => ({
+          ...incident,
+          team: Array.isArray(incident.team) ? incident.team[0] : incident.team
+        })) || []
+        
+        setIncidents(transformedIncidents)
 
         setError(null)
       } catch (e: unknown) {
@@ -207,7 +218,19 @@ export default function PenaltyManagementPage() {
         )}
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert>
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'rules' | 'create' | 'review')}>
         <TabsList>
           <TabsTrigger value="rules">Penalty Rules</TabsTrigger>
           <TabsTrigger value="create">Create Rule</TabsTrigger>
@@ -242,7 +265,7 @@ export default function PenaltyManagementPage() {
                       <tr key={rule.id} className="hover:bg-gray-100">
                         <td className="border px-4 py-2">{rule.name || rule.rule_type}</td>
                         <td className="border px-4 py-2">{rule.event_type}</td>
-                        <td className="border px-4 py-2">{rule.condition.incident_type}</td>
+                        <td className="border px-4 py-2">{rule.condition?.incident_type}</td>
                         <td className="border px-4 py-2">
                           {rule.penalty_unit === 'seconds'
                             ? `+${rule.penalty_value}s`
@@ -250,9 +273,9 @@ export default function PenaltyManagementPage() {
                             ? `-${rule.penalty_value}pts`
                             : `${rule.penalty_value}%`}
                         </td>
-                        <td className="border px-4 py-2">{rule.condition.max_count}</td>
+                        <td className="border px-4 py-2">{rule.condition?.max_count}</td>
                         <td className="border px-4 py-2">
-                          <Badge variant={rule.active ? 'success' : 'destructive'}>
+                          <Badge variant={rule.active ? 'default' : 'destructive'}>
                             {rule.active ? 'Active' : 'Inactive'}
                           </Badge>
                         </td>
@@ -397,9 +420,9 @@ export default function PenaltyManagementPage() {
                       <tr key={incident.id} className="hover:bg-gray-100">
                         <td className="border px-4 py-2">{new Date(incident.occurred_at).toLocaleString()}</td>
                         <td className="border px-4 py-2">{incident.team?.code || 'Unknown'}</td>
-                        <td className="border px-4 py-2">{incident.event_type}</td>
-                        <td className="border px-4 py-2">{incident.incident_type}</td>
-                        <td className="border px-4 py-2 text-red-600 font-semibold">{incident.severity}</td>
+                        <td className="border px-4 py-2">{incident.event_type || '-'}</td>
+                        <td className="border px-4 py-2">{incident.incident_type || '-'}</td>
+                        <td className="border px-4 py-2 text-red-600 font-semibold">{incident.severity || '-'}</td>
                         <td className="border px-4 py-2">{incident.action_taken || '-'}</td>
                         <td className="border px-4 py-2">{incident.description || '-'}</td>
                       </tr>
