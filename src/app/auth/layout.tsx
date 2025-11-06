@@ -1,3 +1,4 @@
+// src/app/auth/layout.tsx
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import '../globals.css'
@@ -12,13 +13,11 @@ export const metadata: Metadata = {
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100`}>
-        <main className="flex flex-col items-center justify-center min-h-screen p-4">
-          {children}
-        </main>
-        <Toaster position="top-right" />
-      </body>
-    </html>
+    <>
+      <main className={`${inter.className} flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4`}>
+        {children}
+      </main>
+      <Toaster position="top-right" />
+    </>
   )
 }

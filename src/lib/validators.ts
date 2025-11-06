@@ -2,16 +2,24 @@ import { z } from 'zod'
 
 // User validation schemas
 export const signUpSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters'),
+  firstName: z.string().min(2, 'First name must be at least 2 characters'),
+  lastName: z.string().min(2, 'Last name must be at least 2 characters'),
   email: z.string().email('Invalid email address'),
+  fatherName: z.string().min(1, 'Father’s name is required'),
+  phone: z.string().min(1, 'Phone is required'),
+  emergencyContact: z.string().min(1, 'Emergency contact is required'),
+  ehicNumber: z.string().optional(), // ONLY THIS FIELD IS NULLABLE
+  teamId: z.string().min(1, 'Team is required'), // required UUID
+  campsiteStaying: z.boolean().optional(), // match DB column default false
+  teamLead: z.boolean().optional(),        // match DB column default false
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
-  isTeamLead: z.boolean().optional(),
-  teamName: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ["confirmPassword"],
+  path: ['confirmPassword'],
 })
+
+
 
 export const signInSchema = z.object({
   email: z.string().email('Invalid email address'),

@@ -20,10 +20,16 @@ interface ChecklistRunnerProps {
   inspectionTypeId: string
 }
 
+type User = {
+  id: string
+  email?: string
+  app_role?: string
+}
+
 export default function ChecklistRunner({ bookingId, inspectionTypeId }: ChecklistRunnerProps) {
   const router = useRouter()
   const supabase = createClientComponentClient()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [commentingItemId, setCommentingItemId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)

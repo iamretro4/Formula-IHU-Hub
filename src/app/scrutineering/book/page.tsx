@@ -1,190 +1,295 @@
 'use client'
-import { useForm, SubmitHandler } from 'react-hook-form'
-import { z } from 'zod' // Corrected import statement
-import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useAuth } from '@/hooks/useAuth'
 import { Database } from '@/lib/types/database'
+import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Loader2 } from 'lucide-react'
+import { AlertCircle, Loader2, Info, ArrowLeft, Trash2 } from 'lucide-react'
+import { DateTime } from 'luxon'
 
-const schema = z.object({
-  inspection_type_id: z.string().uuid(),
-  date: z.string().min(1, "Date is required"),
-  start_time: z.string().min(1, "Start time is required"),
-  resource_index: z.coerce.number().min(1, "Slot is required"),
-  notes: z.string().optional()
-})
-type Values = z.infer<typeof schema>
+const EEST_ZONE = 'Europe/Athens'
 
 type InspectionTypeCard = {
   id: string
   name: string
-  duration?: string|number
-  duration_minutes?: number
-  slots?: number
-  slot_count?: number
+  duration_minutes: number
+  concurrent_slots: number
+  prerequisites?: string[]
+  key: string
+  active: boolean
   can_book: boolean
+  passed: boolean
   subtitle?: string
 }
 
-function getSlots(startTime: string, endTime: string, duration: number) {
-  const slots: string[] = []
-  let [h, m] = startTime.split(':').map(Number)
-  let end = parseInt(endTime.split(':')[0]) * 60 + parseInt(endTime.split(':')[1])
-  let minutes = h * 60 + m
-  while (minutes + duration <= end) {
-    let hours = String(Math.floor(minutes / 60)).padStart(2, '0')
-    let mins = String(minutes % 60).padStart(2, '0')
-    slots.push(`${hours}:${mins}`)
-    minutes += duration
-  }
-  return slots
-}
+type Team = Database['public']['Tables']['teams']['Row']
+type Booking = Database['public']['Tables']['bookings']['Row']
 
 export default function ScrutineeringBookPage() {
+  const { user, profile: authProfile, loading: authLoading } = useAuth()
   const [inspectionTypes, setInspectionTypes] = useState<InspectionTypeCard[]>([])
   const [teamId, setTeamId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [adminViewTeam, setAdminViewTeam] = useState<string | null>(null)
+  const [teams, setTeams] = useState<Team[]>([])
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [initialLoading, setInitialLoading] = useState(true) // New state for initial loading
+  const [initialLoading, setInitialLoading] = useState(true)
   const [selectedInspectionType, setSelectedInspectionType] = useState<InspectionTypeCard | null>(null)
-  const [reservedSlots, setReservedSlots] = useState<string[]>([])
+  const [reservedSlots, setReservedSlots] = useState<Record<string, number>>({})
+  const [teamBookings, setTeamBookings] = useState<Booking[]>([])
+  const [selectedTime, setSelectedTime] = useState<string>("")
+  const [notes, setNotes] = useState('')
+  const [allBookings, setAllBookings] = useState<Booking[]>([])
   const supabase = createClientComponentClient<Database>()
-  const {
-    register, handleSubmit, setValue, watch, formState: { errors }
-  } = useForm<Values>({ 
-    resolver: zodResolver(schema), // Simplified: ZodResolver infers types from schema
-    defaultValues: {
-      inspection_type_id: '',
-      date: new Date().toISOString().split('T')[0],
-      start_time: '',
-      resource_index: 1,
-      notes: ''
-    }
-  })
-  // --- DB Load ---
+  const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate()
+
+  // Initial load
   useEffect(() => {
+    // Wait for auth to be ready
+    if (authLoading) {
+      return
+    }
+    
     let active = true
     ;(async () => {
-      setInitialLoading(true); // Start initial loading
-      setError(null); // Clear previous errors
-
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
-      if (userError) {
-        setError(userError.message);
-        setInitialLoading(false);
-        return;
+      setInitialLoading(true)
+      setError(null)
+      
+      if (!user || !authProfile) {
+        setError('Not authenticated'); setInitialLoading(false); return
       }
-      if (!user || !active) {
-        setInitialLoading(false);
-        return;
+      
+      setUserRole(authProfile.app_role ?? null)
+      if (!authProfile.team_id) {
+        setError('No team profile found. Please complete your profile first.')
+        setInitialLoading(false); return
       }
-
-      const { data: profile, error: profileError } = await supabase.from('user_profiles').select('team_id').eq('id', user.id).single()
-      if (profileError) {
-        setError(profileError.message);
-        setInitialLoading(false);
-        return;
+      setTeamId(authProfile.team_id)
+      if (authProfile.app_role === 'admin') {
+        const { data: allTeams } = await supabase.from('teams').select('id, name').order('name')
+        setTeams(allTeams || [])
+        if (!adminViewTeam && allTeams?.length > 0) setAdminViewTeam(allTeams[0].id)
+      } else {
+        setAdminViewTeam(authProfile.team_id)
       }
-      if (!profile?.team_id) {
-        setError('No team profile found. Please complete your profile first.');
-        setInitialLoading(false);
-        return;
-      }
-      setTeamId(profile.team_id)
-
       const { data: types, error: typesError } = await supabase
         .from('inspection_types')
-        .select('id, name, duration, duration_minutes, slot_count, requirements, sort_order, active, key')
-
+        .select('id, name, duration_minutes, concurrent_slots, prerequisites, active, key')
+        .order('sort_order', { ascending: true })
       if (typesError) {
-        console.error('Error fetching inspection types:', typesError);
-        setError(typesError.message);
-        setInitialLoading(false);
-        return;
+        setError(typesError.message); setInitialLoading(false); return
       }
-
-      // Deduplicate by 'name' column to ensure each distinct inspection name appears once
-      const uniqueTypes = Array.from(
-        new Map((types ?? []).map(t => [t.name, t])).values()
-      )
-      
+      const { data: teamB, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('inspection_type_id, status')
+        .eq('team_id', adminViewTeam ?? authProfile.team_id)
+      if (bookingsError) {
+        setError(bookingsError.message); setInitialLoading(false); return
+      }
+      setTeamBookings(teamB ?? [])
       setInspectionTypes(
-        (uniqueTypes).map(t => ({
-          id: t.id,
-          name: t.name,
-          duration: t.duration ?? t.duration_minutes ?? 120,
-          slots: t.slot_count || 1,
-          can_book: t.active,
-          subtitle: t.requirements ? `Requires ${t.requirements}` : undefined
-        }))
+        (types ?? []).map((t: InspectionTypeCard) => {
+          const passed = teamB?.some(
+            (b: Booking) => b.inspection_type_id === t.id && b.status === 'passed'
+          )
+          let prerequisitesMet = true
+          if (Array.isArray(t.prerequisites) && t.prerequisites.length > 0) {
+            for (const reqKey of t.prerequisites) {
+              const prereqType = (types ?? []).find((tt: InspectionTypeCard) => tt.key === reqKey)
+              if (prereqType) {
+                const prereqPassed = teamB?.some(
+                  (b: Booking) => b.inspection_type_id === prereqType.id && b.status === 'passed'
+                )
+                if (!prereqPassed) prerequisitesMet = false
+              }
+            }
+          }
+          return {
+            id: t.id,
+            name: t.name,
+            duration_minutes: t.duration_minutes ?? 120,
+            concurrent_slots: t.concurrent_slots ?? 1,
+            prerequisites: t.prerequisites ?? [],
+            key: t.key,
+            active: !!t.active,
+            can_book: !!t.active && prerequisitesMet && !passed,
+            passed: !!passed,
+            subtitle: !prerequisitesMet
+              ? `You must pass: ${(Array.isArray(t.prerequisites) ? t.prerequisites.join(', ') : t.prerequisites)} before booking`
+              : passed
+                ? "Already completed"
+                : undefined
+          }
+        })
       )
-      setInitialLoading(false); // End initial loading
+      setInitialLoading(false)
     })()
     return () => { active = false }
-  }, [supabase])
+  }, [authLoading, user, authProfile, supabase, adminViewTeam])
 
-  // When type/date changes, fetch that day's reserved slots for that type and lane
+  // Reserved slots for selected inspection type, for today
   useEffect(() => {
-    if (!selectedInspectionType) {
-      setReservedSlots([])
-      return
-    }
-    const watchedDate = watch('date');
-    if (!watchedDate) {
-      setReservedSlots([])
-      return
-    }
+    if (!selectedInspectionType) { setReservedSlots({}); return }
     (async () => {
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('start_time')
+        .select('start_time, resource_index')
         .eq('inspection_type_id', selectedInspectionType.id)
-        .eq('date', watchedDate)
-      setReservedSlots((bookings ?? []).map(b => b.start_time))
+        .eq('date', todayDate)
+      const slots: Record<string, number> = {};
+      (bookings ?? []).forEach(b => {
+        slots[b.start_time] = (slots[b.start_time] || 0) + 1
+      })
+      setReservedSlots(slots)
     })()
-  }, [selectedInspectionType, watch('date'), supabase])
+  }, [selectedInspectionType, supabase, todayDate, ok])
 
-  function selectType(t: InspectionTypeCard) {
-    setSelectedInspectionType(t)
-    setValue('inspection_type_id', t.id)
-    setValue('date', new Date().toISOString().split('T')[0]) // Set date as today
-    setValue('resource_index', 1) // Default lane
-    setValue('start_time', ''); // Clear selected time when inspection type changes
+  // For admin management: get all bookings for today/type for display
+  useEffect(() => {
+    if (!selectedInspectionType) { setAllBookings([]); return }
+    (async () => {
+      const { data } = await supabase
+        .from('bookings')
+        .select('id, start_time, resource_index, teams(name), team_id')
+        .eq('inspection_type_id', selectedInspectionType.id)
+        .eq('date', todayDate)
+      setAllBookings(data ?? [])
+    })()
+  }, [selectedInspectionType, supabase, todayDate, ok])
+
+  function getSlots(startTime: string, endTime: string, duration: number) {
+    let slots: string[] = []
+    let curr = DateTime.fromISO(`${todayDate}T${startTime}:00`, { zone: EEST_ZONE })
+    const end = DateTime.fromISO(`${todayDate}T${endTime}:00`, { zone: EEST_ZONE })
+    while (curr.plus({ minutes: duration }) <= end) {
+      slots.push(curr.toFormat('HH:mm'))
+      curr = curr.plus({ minutes: duration })
+    }
+    return slots
   }
 
-  const onSubmit: SubmitHandler<Values> = async (values) => {
-    setOk(false)
-    setError(null)
-    setLoading(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      setError('User not authenticated.')
-      setLoading(false)
-      return;
-    }
+  const slots = selectedInspectionType
+    ? getSlots("09:00", "19:00", selectedInspectionType.duration_minutes)
+    : []
 
+  function isSlotAvailable(time: string) {
+    if (!selectedInspectionType) return false
+    const reservedCount = reservedSlots[time] || 0
+    return reservedCount < selectedInspectionType.concurrent_slots
+  }
+
+  function handleSlotClick(time: string) {
+    setSelectedTime(time)
+    setError(null)
+    setOk(false)
+  }
+
+  async function handleConfirmBooking() {
+    setLoading(true); setError(null); setOk(false)
+    const { data: { user } } = await supabase.auth.getUser()
+    const useTeamId = userRole === 'admin' ? adminViewTeam : teamId
+    if (!selectedInspectionType || !selectedTime) {
+      setError('Select inspection type and time.'); setLoading(false); return
+    }
+    // Fetch bookings for this slot and find first available lane
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('resource_index')
+      .eq('inspection_type_id', selectedInspectionType.id)
+      .eq('date', todayDate)
+      .eq('start_time', selectedTime)
+    const reservedLanes = new Set((bookings ?? []).map(b => b.resource_index))
+    let lane = 1;
+    while (reservedLanes.has(lane) && lane <= (selectedInspectionType?.concurrent_slots ?? 1)) lane++
+    if (lane > (selectedInspectionType?.concurrent_slots ?? 1)) {
+      setError('All slots full, please refresh.');
+      setLoading(false);
+      return
+    }
+    // Insert booking
     const { error: insertError } = await supabase.from('bookings').insert({
-      team_id: teamId!,
-      inspection_type_id: values.inspection_type_id,
-      date: values.date,
-      start_time: values.start_time,
-      end_time: values.start_time, // Assuming end_time is same as start_time for now
-      resource_index: values.resource_index,
+      team_id: useTeamId!,
+      inspection_type_id: selectedInspectionType.id,
+      date: todayDate,
+      start_time: selectedTime,
+      end_time: DateTime.fromISO(`${todayDate}T${selectedTime}:00`, { zone: EEST_ZONE })
+        .plus({ minutes: selectedInspectionType?.duration_minutes ?? 120 })
+        .toFormat('HH:mm'),
+      resource_index: lane,
       status: 'upcoming',
-      notes: values.notes,
+      notes,
+      is_rescrutineering: false,
       created_by: user.id
     })
     setLoading(false)
-    if (insertError) {
-      setError(insertError.message)
-    }
-    else {
-      setOk(true)
-    }
+    if (insertError) { setError(insertError.message); setOk(false) }
+    else { setOk(true); setSelectedTime(""); setNotes("") }
+  }
+
+  async function handleAdminDeleteBooking(bookingId: string) {
+    setLoading(true)
+    await supabase.from('bookings').delete().eq('id', bookingId)
+    setLoading(false)
+    setOk(true) // triggers refetch
+  }
+
+  // Admin team selector
+  const adminTeamSelector = userRole === 'admin' && teams.length > 0 && (
+    <div className="mb-4">
+      <label className="font-semibold mr-2">Book for Team:</label>
+      <select
+        value={adminViewTeam ?? ''}
+        onChange={e => setAdminViewTeam(e.target.value)}
+        className="border p-1 rounded"
+      >
+        {teams.map(team => (
+          <option key={team.id} value={team.id}>{team.name}</option>
+        ))}
+      </select>
+    </div>
+  )
+
+  // Admin bookings grid for visual management
+  function AdminBookingsGrid() {
+    if (userRole !== 'admin' || !selectedInspectionType) return null
+    return (
+      <div>
+        <h2 className="font-semibold text-lg mb-2 mt-8">All Bookings for {selectedInspectionType.name} ({todayDate})</h2>
+        <div className="grid grid-cols-3 gap-2">
+          {slots.map(time => {
+            // For each possible concurrent slot, show bookings
+            for (let lane = 1; lane <= selectedInspectionType.concurrent_slots; lane++) {
+              const booking = allBookings.find(b =>
+                b.start_time === time &&
+                b.resource_index === lane
+              )
+              if (booking) {
+                return (
+                  <div key={time + "-lane-" + lane} className="bg-blue-100 rounded px-2 py-1 flex items-center gap-2">
+                    <span className="font-bold">{booking.teams?.name}</span>
+                    <span className="text-xs">({time}, Ln {lane})</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto text-red-600"
+                      onClick={() => handleAdminDeleteBooking(booking.id)}
+                    ><Trash2 size={18}/></Button>
+                  </div>
+                )
+              }
+            }
+            return (
+              <div key={time + "-empty"} className="px-2 py-1 text-xs text-gray-400 bg-gray-50 rounded border">
+                {time} (Available)
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   if (initialLoading) {
@@ -195,7 +300,6 @@ export default function ScrutineeringBookPage() {
       </div>
     )
   }
-
   if (error) {
     return (
       <div className="max-w-lg mx-auto p-8 text-center">
@@ -206,7 +310,6 @@ export default function ScrutineeringBookPage() {
       </div>
     )
   }
-
   if (!teamId) {
     return <div className="p-8 text-center text-red-600">No team profile found. Please complete your profile first.</div>
   }
@@ -214,25 +317,21 @@ export default function ScrutineeringBookPage() {
     return <div className="max-w-lg mx-auto p-8 text-center text-green-700 font-bold">Booking successful!</div>
   }
 
-  const slots = selectedInspectionType
-    ? getSlots("09:00", "19:00", Number(selectedInspectionType.duration || selectedInspectionType.duration_minutes || 120))
-    : []
-
   return (
-    <div className="flex justify-center pt-12">
-      <div className="bg-white w-full max-w-2xl p-8 border rounded-xl shadow-md">
-        <h1 className="text-2xl font-bold mb-1">Book Inspection</h1>
+    <div className="flex justify-center pt-12 bg-gray-100 min-h-screen">
+      <div className="bg-white max-w-2xl w-full p-8 border rounded-xl shadow-lg">
+        <h1 className="text-2xl font-bold mb-2">Book Inspection</h1>
         <p className="text-gray-500 mb-4">
-          Book an available inspection slot for today: <span className="font-semibold">{new Date().toISOString().split('T')[0]}</span>
+          Book an available inspection slot for today: <span className="font-semibold">{todayDate}</span>
         </p>
-        {/* Card Selection */}
+        {adminTeamSelector}
         <label className="block font-semibold mb-2">1. Select Inspection Type</label>
         <div className="grid grid-cols-2 gap-4 mb-6">
           {inspectionTypes.map((t) => (
             <button
               type="button"
               key={t.id}
-              onClick={() => selectType(t)}
+              onClick={() => t.can_book ? setSelectedInspectionType(t) : null}
               disabled={!t.can_book}
               className={`
                 flex flex-col items-start border rounded-lg px-5 py-4 transition
@@ -242,37 +341,52 @@ export default function ScrutineeringBookPage() {
             >
               <div className="font-bold text-md mb-1">{t.name}</div>
               <div className="text-xs text-gray-600 mb-1">
-                {(t.duration || t.duration_minutes || 120) + " min"} / {(t.slots || t.slot_count || 1)} slot(s)
+                {t.duration_minutes} min / {t.concurrent_slots} slot(s)
               </div>
               {t.subtitle && (
-                <div className="text-xs text-red-500">{t.subtitle}</div>
+                <div className={`text-xs font-semibold ${t.passed ? "text-green-600" : "text-red-500"}`}>{t.subtitle}</div>
               )}
             </button>
           ))}
         </div>
-        {/* Slot/Booking Controls */}
         {selectedInspectionType && (
-          <form onSubmit={handleSubmit(onSubmit)} className="mt-8">
-            <label className="block font-semibold mb-2">2. Select Time Slot</label>
-            <select
-              {...register('start_time')} // Corrected to register 'start_time'
+          <div className="mt-8">
+            <label className="block font-semibold mb-3">2. Select Time Slot</label>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              {slots.map(time => {
+                const full = !isSlotAvailable(time)
+                return (
+                  <button
+                    key={time}
+                    disabled={full || loading}
+                    onClick={() => handleSlotClick(time)}
+                    className={`
+                      px-4 py-2 rounded-lg font-bold text-sm mb-1
+                      ${full ? "bg-gray-100 text-gray-400 cursor-not-allowed border" : (selectedTime === time ? "bg-blue-600 text-white" : "bg-blue-100 hover:bg-blue-200 text-blue-900 border border-blue-400 cursor-pointer")}
+                      w-full
+                    `}
+                    style={{ minWidth: 80 }}
+                  >
+                    {time}{full ? ' (Full)' : ''}
+                  </button>
+                )
+              })}
+            </div>
+            <label className="block font-semibold mt-4 mb-2 flex items-center gap-2">Notes
+              <Info className="h-4 w-4 text-blue-400" title="Optional. Add context or comments for your booking." />
+            </label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              maxLength={200}
               className="w-full border rounded px-3 py-2 bg-neutral-50 focus:bg-white focus:border-blue-300"
-              required
-            >
-              <option value="">Select an available time slot...</option>
-              {slots.map(time => (
-                <option key={time} value={time} disabled={reservedSlots.includes(time)}>
-                  {time} {reservedSlots.includes(time) ? ' (Reserved)' : ''}
-                </option>
-              ))}
-            </select>
-            {errors.start_time && ( // Display error for start_time
-              <p className="text-sm text-red-600 mt-1">{errors.start_time.message}</p>
-            )}
+              placeholder="Optional remarks (200 chars max)"
+            />
             <Button
-              disabled={loading}
-              type="submit"
-              className="w-full mt-2 py-2 text-base font-bold rounded-lg"
+              disabled={!selectedTime || loading}
+              type="button"
+              className="w-full mt-4 py-2 text-base font-bold rounded-lg"
+              onClick={handleConfirmBooking}
             >
               {loading ? (
                 <>
@@ -286,14 +400,15 @@ export default function ScrutineeringBookPage() {
             <Button
               variant="outline"
               type="button"
-              className="w-full mt-2"
-              onClick={() => setSelectedInspectionType(null)}
+              className="w-full mt-2 flex items-center justify-center gap-2"
+              onClick={() => { setSelectedInspectionType(null); setSelectedTime(""); setNotes(""); setError(null); setOk(false); }}
             >
-              Change Inspection Type
+              <ArrowLeft className="h-4 w-4" /> Change Inspection Type
             </Button>
             {error && <div className="text-center mt-3 text-red-600 font-semibold">{error}</div>}
-          </form>
+          </div>
         )}
+        {AdminBookingsGrid()}
       </div>
     </div>
   )

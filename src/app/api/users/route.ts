@@ -1,47 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions, hasMinimumRole } from '@/lib/auth'
-import { prisma } from '@/lib/prisma'
-import { UserRole } from '@prisma/client'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
+import { Database } from '@/lib/types/database'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session) {
+    const supabase = createRouteHandlerClient<Database>({ cookies })
+    
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url)
-    const role = searchParams.get('role') as UserRole | null
+    // Get user profile to check role
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('app_role')
+      .eq('id', user.id)
+      .single()
 
-    const where: any = {}
+    const { searchParams } = new URL(request.url)
+    const role = searchParams.get('role')
+
+    let query = supabase
+      .from('user_profiles')
+      .select('id, email, first_name, last_name, app_role, created_at, team_id, teams(name, code)')
 
     if (role) {
-      where.role = role
+      query = query.eq('app_role', role)
     }
 
-    // Only admins can see all users, others see limited info
-    const select = session.user.role === UserRole.ADMIN 
-      ? {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          createdAt: true,
-        }
-      : {
-          id: true,
-          name: true,
-          role: true,
-        }
+    // Only admins can see all users
+    if (profile?.app_role !== 'admin') {
+      // Non-admins see limited info
+      query = query.select('id, first_name, last_name, app_role')
+    }
 
-    const users = await prisma.user.findMany({
-      where,
-      select,
-      orderBy: { createdAt: 'desc' }
-    })
+    const { data: users, error } = await query.order('created_at', { ascending: false })
 
-    return NextResponse.json(users)
+    if (error) {
+      console.error('Users GET error:', error)
+      return NextResponse.json(
+        { message: 'Failed to fetch users' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(users || [])
   } catch (error) {
     console.error('Users GET error:', error)
     return NextResponse.json(
