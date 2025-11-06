@@ -70,7 +70,7 @@ export default function SystemReportsPage() {
 
         const totalResults = resultsResult.data?.length || 0
         const passedResults = resultsResult.data?.filter((r) => r.status === 'passed').length || 0
-        const passRate = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : 0
+        const passRate = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : '0'
 
         setReports({
           totalBookings: bookingsResult.count || 0,
@@ -91,7 +91,8 @@ export default function SystemReportsPage() {
   }, [supabase, router])
 
   const handleExport = () => {
-    toast.info('Export functionality coming soon')
+    // Simple alert instead of toast
+    alert('Export functionality coming soon')
   }
 
   if (loading) {
@@ -233,4 +234,3 @@ export default function SystemReportsPage() {
     </div>
   )
 }
-
