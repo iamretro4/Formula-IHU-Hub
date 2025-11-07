@@ -1,9 +1,8 @@
 // Auth utilities for Supabase-based authentication
 // Supports both Supabase roles and legacy Prisma roles for compatibility
 
-import { authOptions } from './validations/auth'
-
-export { authOptions }
+// Note: authOptions export removed to avoid next-auth dependency issues
+// If needed, import directly from './validations/auth'
 
 // Supabase role hierarchy (from database schema)
 const supabaseRoleHierarchy: Record<string, number> = {
