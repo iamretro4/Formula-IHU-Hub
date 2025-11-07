@@ -1,14 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, Users, ClipboardCheck, Flag, TrendingUp, AlertCircle } from 'lucide-react'
 import { Database } from '@/lib/types/database'
 
 export default function AdminPanelPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState({
@@ -20,28 +24,36 @@ export default function AdminPanelPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
     const loadData = async () => {
+      if (currentRunId !== effectRunIdRef.current) return
+      setLoading(true)
       try {
         const { data: { user } } = await supabase.auth.getUser()
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (!user) {
           router.push('/auth/signin')
           return
         }
 
         // Check user role
-const { data: profile } = await supabase
-  .from('profiles')
-  .select('app_role')
-  .eq('user_id', user.id)
-  .single() as { data: { app_role: string } | null }
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('app_role')
+          .eq('id', user.id)
+          .single() as { data: { app_role: string } | null }
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        if (!profile || profile.app_role !== 'admin') {
+          router.push('/dashboard')
+          return
+        }
 
-if (!profile || profile.app_role !== 'admin') {
-  router.push('/dashboard')
-  return
-}
-
-
-        setUserRole(profile.app_role)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setUserRole(profile.app_role)
+        }
 
         // Load stats
         const [usersResult, teamsResult, bookingsResult, inspectionsResult] = await Promise.all([
@@ -50,21 +62,29 @@ if (!profile || profile.app_role !== 'admin') {
           supabase.from('bookings').select('id', { count: 'exact', head: true }),
           supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'ongoing'),
         ])
-
-        setStats({
-          totalUsers: usersResult.count || 0,
-          totalTeams: teamsResult.count || 0,
-          totalBookings: bookingsResult.count || 0,
-          activeInspections: inspectionsResult.count || 0,
-        })
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        if (active && currentRunId === effectRunIdRef.current) {
+          setStats({
+            totalUsers: usersResult.count || 0,
+            totalTeams: teamsResult.count || 0,
+            totalBookings: bookingsResult.count || 0,
+            activeInspections: inspectionsResult.count || 0,
+          })
+        }
       } catch (error) {
-        console.error('Failed to load admin data:', error)
+        if (active && currentRunId === effectRunIdRef.current) {
+          console.error('Failed to load admin data:', error)
+        }
       } finally {
-        setLoading(false)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setLoading(false)
+        }
       }
     }
 
     loadData()
+    return () => { active = false }
   }, [supabase, router])
 
   if (loading) {

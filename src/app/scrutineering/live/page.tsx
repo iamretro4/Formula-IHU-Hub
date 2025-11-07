@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 import { Loader2 } from 'lucide-react'
 import { FaPlay, FaFilePdf, FaUndo } from 'react-icons/fa'
 import { jsPDF } from 'jspdf'
@@ -59,53 +60,237 @@ export default function InspectionQueuePage() {
   const [tab, setTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming')
   const [loading, setLoading] = useState(true)
   const [reinspectLoading, setReinspectLoading] = useState<string | null>(null)
-  const supabase = createClientComponentClient()
+  const [authError, setAuthError] = useState<string | null>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
 
   useEffect(() => { setToday(new Date().toISOString().split('T')[0]) }, [])
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Queue] Auth state changed:', event)
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        // Reload user profile when auth state changes
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser()
+          if (userError || !user) {
+            setAuthError('Session expired. Please sign in again.')
+            setRole('')
+            setTeamId(null)
+            return
+          }
+          const { data: profile, error: profileError } = await supabase
+            .from('user_profiles')
+            .select('app_role, team_id')
+            .eq('id', user.id).single()
+          if (profileError || !profile) {
+            console.error('[Queue] Profile error after auth change:', profileError)
+            return
+          }
+          setRole(profile.app_role || '')
+          setTeamId(profile.team_id || null)
+          setAuthError(null)
+        } catch (err) {
+          console.error('[Queue] Error handling auth state change:', err)
+        }
+      }
+    })
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [supabase])
 
   // Fetch current user & role info
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('app_role, team_id')
-        .eq('id', user.id).single()
-      if (!profile || cancelled) return
-      setRole(profile.app_role || '')
-      setTeamId(profile.team_id || null)
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser()
+        if (userError) {
+          console.error('[Queue] Auth error:', userError)
+          if (userError.message?.includes('JWT') || userError.message?.includes('token') || userError.message?.includes('expired')) {
+            setAuthError('Session expired. Please sign in again.')
+          }
+          return
+        }
+        if (!user || cancelled) {
+          setAuthError('Not authenticated. Please sign in.')
+          return
+        }
+        setAuthError(null)
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('app_role, team_id')
+          .eq('id', user.id).single()
+        if (profileError) {
+          console.error('[Queue] Profile error:', profileError)
+          // Check if it's an auth error
+          if (profileError.code === 'PGRST301' || profileError.message?.includes('JWT') || profileError.message?.includes('token')) {
+            setAuthError('Session expired. Please sign in again.')
+          }
+          return
+        }
+        if (!profile || cancelled) return
+        if (!cancelled) {
+          setRole(profile.app_role || '')
+          setTeamId(profile.team_id || null)
+        }
+      } catch (err) {
+        console.error('[Queue] Unexpected error loading user:', err)
+        setAuthError('Failed to load user data. Please refresh the page.')
+      }
     })()
     return () => { cancelled = true }
-  }, [supabase, today])
+  }, [supabase])
 
   // Fetch bookings (poll every 12s)
   useEffect(() => {
-    if (!today) return
-    let cancelled = false
-    let intervalId: NodeJS.Timeout
-    async function loadQueue() {
-      setLoading(true)
-      let query = supabase
-        .from('bookings')
-        .select(`
-          *,
-          inspection_results(id, status, completed_at, scrutineer_ids),
-          inspection_types(name),
-          teams(name, code)
-        `)
-        .eq('date', today)
-        .order('start_time')
-      if (role === 'team_leader' || role === 'team_member') query = query.eq('team_id', teamId)
-      const { data } = await query
-      if (!cancelled) setBookings((data ?? []) as unknown as Booking[])
+    if (!today) {
       setLoading(false)
+      return
+    }
+    let cancelled = false
+    let isInitialLoad = true
+    async function loadQueue() {
+      if (cancelled) return
+      try {
+        // Only show loading spinner on initial load, not on polling updates
+        if (isInitialLoad) {
+          setLoading(true)
+        }
+        let query = supabase
+          .from('bookings')
+          .select(`
+            *,
+            inspection_results(id, status, completed_at, scrutineer_ids),
+            inspection_types(name),
+            teams(name, code)
+          `)
+          .eq('date', today)
+          .order('start_time')
+        if ((role === 'team_leader' || role === 'team_member') && teamId) {
+          query = query.eq('team_id', teamId)
+        }
+        const { data, error } = await query
+        if (cancelled) return
+        
+        if (error) {
+          console.error('[Queue] Error fetching bookings:', error)
+          // Check if it's an auth error
+          if (error.code === 'PGRST301' || error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('expired') || error.code === '42501') {
+            setAuthError('Session expired. Please sign in again.')
+            // Stop polling on auth errors
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current)
+              intervalRef.current = null
+            }
+          }
+          if (!cancelled) {
+            setBookings([])
+            setLoading(false)
+          }
+          return
+        }
+        
+        if (data) {
+          // Fetch inspection_results separately to ensure we have the data
+          const bookingIds = data.map((b: any) => b.id)
+          let resultsData: any[] | null = null
+          
+          if (bookingIds.length > 0) {
+            const { data: results, error: resultsError } = await supabase
+              .from('inspection_results')
+              .select('booking_id, status, completed_at, scrutineer_ids')
+              .in('booking_id', bookingIds)
+            
+            if (cancelled) return
+            
+            if (resultsError) {
+              console.error('[Queue] Error fetching inspection results:', resultsError)
+              // Check if it's an auth error
+              if (resultsError.code === 'PGRST301' || resultsError.message?.includes('JWT') || resultsError.message?.includes('token') || resultsError.message?.includes('expired') || resultsError.code === '42501') {
+                setAuthError('Session expired. Please sign in again.')
+                // Stop polling on auth errors
+                if (intervalRef.current) {
+                  clearInterval(intervalRef.current)
+                  intervalRef.current = null
+                }
+              }
+            } else {
+              resultsData = results
+            }
+          }
+          
+          if (cancelled) return
+          
+          // Merge inspection_results into bookings
+          const bookingsWithResults = data.map((booking: any) => {
+            const result = resultsData?.find((r: any) => r.booking_id === booking.id)
+            return {
+              ...booking,
+              inspection_results: result ? [result] : null
+            }
+          })
+          
+          if (!cancelled) {
+            setBookings(bookingsWithResults as unknown as Booking[])
+            
+            // Debug: log inspection results structure for completed bookings
+            const completed = bookingsWithResults.filter((b: any) => b.status === 'completed')
+            if (completed.length > 0) {
+              console.log('[Queue] Completed bookings:', completed.length)
+              completed.forEach((b: any) => {
+                const results = b.inspection_results
+                const firstResult = Array.isArray(results) && results.length > 0 ? results[0] : null
+                console.log('[Queue] Booking details:', {
+                  id: b.id,
+                  bookingStatus: b.status,
+                  hasInspectionResults: !!results,
+                  inspectionResultsType: Array.isArray(results) ? 'array' : results === null ? 'null' : typeof results,
+                  inspectionResultsLength: Array.isArray(results) ? results.length : 'N/A',
+                  firstResult: firstResult,
+                  firstResultStatus: firstResult?.status,
+                  firstResultKeys: firstResult ? Object.keys(firstResult) : []
+                })
+                // Also log the raw inspection_results to see everything
+                console.log('[Queue] Raw inspection_results:', JSON.stringify(results, null, 2))
+              })
+            }
+          }
+        } else {
+          if (!cancelled) {
+            setBookings([])
+          }
+        }
+      } catch (err) {
+        console.error('[Queue] Unexpected error:', err)
+        if (!cancelled) {
+          setBookings([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+          isInitialLoad = false
+        }
+      }
     }
     loadQueue()
-    intervalId = setInterval(loadQueue, 12000)
-    return () => { cancelled = true; clearInterval(intervalId) }
-    // eslint-disable-next-line
+    intervalRef.current = setInterval(() => {
+      if (!cancelled) {
+        loadQueue()
+      }
+    }, 12000)
+    return () => { 
+      cancelled = true
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+        intervalRef.current = null
+      }
+    }
   }, [supabase, today, role, teamId])
 
   // Tab filtering
@@ -119,15 +304,29 @@ export default function InspectionQueuePage() {
     )
 
   // Robust passed/failed count logic
+  // Note: inspection_results is a one-to-one relation, so it's an array with at most one element
   const completedBookings = bookings.filter(b => b.status === 'completed')
-  const passedCount = completedBookings.filter(
-    b => Array.isArray(b.inspection_results) &&
-      b.inspection_results.some(r => r.status === 'passed')
-  ).length
-  const failedCount = completedBookings.filter(
-    b => Array.isArray(b.inspection_results) &&
-      b.inspection_results.some(r => r.status === 'failed')
-  ).length
+  const passedCount = completedBookings.filter(b => {
+    const result = b.inspection_results?.[0]
+    const isPassed = result?.status === 'passed'
+    if (completedBookings.length > 0 && !isPassed) {
+      console.log('[Queue] Not passed - booking:', b.id, 'result:', result, 'status:', result?.status)
+    }
+    return isPassed
+  }).length
+  const failedCount = completedBookings.filter(b => {
+    const result = b.inspection_results?.[0]
+    const isFailed = result?.status === 'failed'
+    if (completedBookings.length > 0 && !isFailed) {
+      console.log('[Queue] Not failed - booking:', b.id, 'result:', result, 'status:', result?.status)
+    }
+    return isFailed
+  }).length
+  
+  // Debug: log counts
+  if (completedBookings.length > 0) {
+    console.log('[Queue] Counts - completed:', completedBookings.length, 'passed:', passedCount, 'failed:', failedCount)
+  }
 
 
   // Export PDF (existing logic)
@@ -204,6 +403,17 @@ export default function InspectionQueuePage() {
           <span className="px-3 py-1 bg-red-50 border-red-200 border text-red-800 font-semibold rounded-full">
             Failed: {failedCount}
           </span>
+        </div>
+      )}
+      {authError && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-800 font-semibold mb-2">{authError}</p>
+          <Link
+            href="/auth/signin"
+            className="inline-block px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-semibold transition"
+          >
+            Sign In Again
+          </Link>
         </div>
       )}
       <div>

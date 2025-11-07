@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -81,7 +82,11 @@ type ScoringFormData = z.infer<typeof scoringFormSchema>;
 export default function BusinessPlanScore() {
   const params = useParams<{ bookingId: string }>()
   const paramBookingId = params?.bookingId
-  const supabase = createClientComponentClient()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
   const [criteria, setCriteria] = useState<JudgedEventCriterion[]>([])
@@ -112,11 +117,16 @@ export default function BusinessPlanScore() {
   const formScores = watch('scores');
 
   useEffect(() => {
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
     async function loadInitialData() {
+      if (currentRunId !== effectRunIdRef.current) return
       setIsLoading(true);
       setError(null);
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (userError) throw userError;
         if (!user) throw new Error('User not authenticated');
         const { data: profileData, error: profileError } = await supabase
@@ -124,24 +134,33 @@ export default function BusinessPlanScore() {
           .select('id, app_role, first_name, last_name')
           .eq('id', user.id)
           .single() as { data: UserProfile | null, error: any }
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (profileError) throw profileError;
-        setCurrentUser(profileData);
+        if (active && currentRunId === effectRunIdRef.current) {
+          setCurrentUser(profileData);
+        }
 
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('judged_event_bookings')
           .select('*, teams:team_id(id, code, name)')
           .eq('event_id', eventId)
           .order('scheduled_time');
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (bookingsError) throw bookingsError;
-        setBookings((bookingsData || []) as JudgedEventBooking[]);
+        if (active && currentRunId === effectRunIdRef.current) {
+          setBookings((bookingsData || []) as JudgedEventBooking[]);
+        }
 
         const { data: criteriaData, error: criteriaError } = await supabase
           .from('judged_event_criteria')
           .select('*')
           .eq('event_id', eventId)
           .order('criterion_index');
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (criteriaError) throw criteriaError;
-        setCriteria((criteriaData || []) as JudgedEventCriterion[]);
+        if (active && currentRunId === effectRunIdRef.current) {
+          setCriteria((criteriaData || []) as JudgedEventCriterion[]);
+        }
 
         const criterionIds = criteriaData?.map((c: any) => c.id) || [];
         let allScoresQuery = supabase
@@ -156,16 +175,24 @@ export default function BusinessPlanScore() {
         }
         const { data: allScores, error: allScoresError } = await allScoresQuery
           .order('submitted_at', { ascending: false });
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (allScoresError) throw allScoresError;
-        setSubmittedScores((allScores || []) as unknown as JudgedEventScore[]);
+        if (active && currentRunId === effectRunIdRef.current) {
+          setSubmittedScores((allScores || []) as unknown as JudgedEventScore[]);
+        }
       } catch (err) {
-        console.error('Error loading initial data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load initial data.');
+        if (active && currentRunId === effectRunIdRef.current) {
+          console.error('Error loading initial data:', err);
+          setError(err instanceof Error ? err.message : 'Failed to load initial data.');
+        }
       } finally {
-        setIsLoading(false);
+        if (active && currentRunId === effectRunIdRef.current) {
+          setIsLoading(false);
+        }
       }
     }
     loadInitialData();
+    return () => { active = false }
   }, [supabase]);
 
   useEffect(() => {

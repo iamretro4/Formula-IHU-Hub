@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,7 +17,11 @@ type InspectionResult = {
 }
 
 export default function SystemReportsPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -31,9 +35,15 @@ export default function SystemReportsPage() {
   })
 
   useEffect(() => {
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
     const loadData = async () => {
+      if (currentRunId !== effectRunIdRef.current) return
+      setLoading(true)
       try {
         const { data: { user } } = await supabase.auth.getUser()
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (!user) {
           router.push('/auth/signin')
           return
@@ -45,13 +55,16 @@ export default function SystemReportsPage() {
           .select('app_role')
           .eq('id', user.id)
           .single() as { data: UserProfile | null }
-
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (!profile || !['admin', 'scrutineer'].includes(profile.app_role || '')) {
           router.push('/dashboard')
           return
         }
 
-        setUserRole(profile.app_role)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setUserRole(profile.app_role)
+        }
 
         // Load report data
         const [
@@ -75,28 +88,37 @@ export default function SystemReportsPage() {
           supabase.from('teams').select('id', { count: 'exact', head: true }),
           supabase.from('inspection_results').select('status'),
         ])
-
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        
         const inspectionResults = resultsResult.data as InspectionResult[] | null
         const totalResults = inspectionResults?.length || 0
         const passedResults = inspectionResults?.filter((r) => r.status === 'passed').length || 0
         const passRate = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : '0'
 
-        setReports({
-          totalBookings: bookingsResult.count || 0,
-          completedInspections: completedResult.count || 0,
-          pendingInspections: pendingResult.count || 0,
-          totalUsers: usersResult.count || 0,
-          totalTeams: teamsResult.count || 0,
-          passRate: parseFloat(passRate),
-        })
+        if (active && currentRunId === effectRunIdRef.current) {
+          setReports({
+            totalBookings: bookingsResult.count || 0,
+            completedInspections: completedResult.count || 0,
+            pendingInspections: pendingResult.count || 0,
+            totalUsers: usersResult.count || 0,
+            totalTeams: teamsResult.count || 0,
+            passRate: parseFloat(passRate),
+          })
+        }
       } catch (error) {
-        console.error('Failed to load reports:', error)
+        if (active && currentRunId === effectRunIdRef.current) {
+          console.error('Failed to load reports:', error)
+        }
       } finally {
-        setLoading(false)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setLoading(false)
+        }
       }
     }
 
     loadData()
+    return () => { active = false }
   }, [supabase, router])
 
   const handleExport = () => {

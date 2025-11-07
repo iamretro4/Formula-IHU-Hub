@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 import { FaRegCommentDots, FaFilePdf, FaUndo } from 'react-icons/fa'
 import { Loader2 } from 'lucide-react'
 import jsPDF from 'jspdf'
@@ -80,7 +81,10 @@ export default function ChecklistBookingPage() {
   const params = useParams<{ bookingId: string }>()
   const bookingId = params?.bookingId
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
   const [booking, setBooking] = useState<Booking | null>(null)
   const [checklist, setChecklist] = useState<ChecklistTemplate[]>([])
   const [status, setStatus] = useState<Record<string, InspectionProgress>>({})
@@ -103,8 +107,13 @@ export default function ChecklistBookingPage() {
         setError(null)
         // User and profile
         const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
-        if (userError) throw userError
-        if (!authUser) throw new Error('User not authenticated')
+        if (userError) {
+          console.error('[Inspection] Auth error:', userError)
+          throw new Error('Auth session missing! Please sign in again.')
+        }
+        if (!authUser) {
+          throw new Error('Auth session missing! Please sign in again.')
+        }
         if (authUser) {
           const { data: userProfile, error: profileError } = await supabase.from('user_profiles').select('*').eq('id', authUser.id).single()
           if (profileError) throw profileError

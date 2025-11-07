@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'  // Import Input here
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -52,7 +52,11 @@ type UserProfile = {
 }
 
 export default function MarshalAndLiveTrackPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
   const [user, setUser] = useState<UserProfile | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [sector, setSector] = useState<string | null>(null)
@@ -70,26 +74,41 @@ export default function MarshalAndLiveTrackPage() {
   const [liveTeams, setLiveTeams] = useState<TrackEntry[]>([])
 
   useEffect(() => {
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
     async function loadData() {
+      if (currentRunId !== effectRunIdRef.current) return
       setIsLoading(true)
       setError(null)
       try {
         const { data: { user: authUser } } = await supabase.auth.getUser()
-        setUser(authUser)
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        if (active && currentRunId === effectRunIdRef.current) {
+          setUser(authUser)
+        }
         const { data: teamsData } = await supabase
           .from('teams')
           .select('*')
           .order('code', { ascending: true })
-        setTeams(teamsData ?? [])
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        if (active && currentRunId === effectRunIdRef.current) {
+          setTeams(teamsData ?? [])
+        }
         await Promise.all([loadIncidents(), loadEntries()])
       } catch (err: unknown) {
-        const error = err instanceof Error ? err : new Error('Unknown error')
-        setError(error.message || 'Failed to load marshal data')
+        if (active && currentRunId === effectRunIdRef.current) {
+          const error = err instanceof Error ? err : new Error('Unknown error')
+          setError(error.message || 'Failed to load marshal data')
+        }
       } finally {
-        setIsLoading(false)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setIsLoading(false)
+        }
       }
     }
     loadData()
+    return () => { active = false }
   }, [supabase])
 
   async function loadIncidents() {

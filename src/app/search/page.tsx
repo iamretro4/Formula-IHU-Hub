@@ -7,19 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { Search, Users, Car, ClipboardCheck } from 'lucide-react'
+import { Search, Users, ClipboardCheck } from 'lucide-react'
 import { Database } from '@/lib/types/database'
 import Link from 'next/link'
 
 type Team = Database['public']['Tables']['teams']['Row']
-type Vehicle = {
-  id: string
-  name?: string
-  team_id?: string
-  chassis_number?: string
-  status?: string
-  teams?: { name: string; code: string } | null
-}
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
   teams?: { name: string; code: string } | null
   inspection_types?: { name: string } | null
@@ -33,11 +25,9 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<{
     teams: Team[]
-    vehicles: Vehicle[]
     bookings: Booking[]
   }>({
     teams: [],
-    vehicles: [],
     bookings: [],
   })
 
@@ -45,7 +35,7 @@ export default function SearchPage() {
     if (query.trim()) {
       performSearch(query)
     } else {
-      setResults({ teams: [], vehicles: [], bookings: [] })
+      setResults({ teams: [], bookings: [] })
     }
   }, [query])
 
@@ -63,13 +53,6 @@ export default function SearchPage() {
         .or(`name.ilike.${searchTerm},code.ilike.${searchTerm}`)
         .limit(10)
 
-      // Search vehicles
-      const { data: vehicles } = await supabase
-        .from('vehicles')
-        .select('*, teams(name, code)')
-        .or(`name.ilike.${searchTerm},chassis_number.ilike.${searchTerm}`)
-        .limit(10)
-
       // Search bookings
       const { data: bookings } = await supabase
         .from('bookings')
@@ -79,7 +62,6 @@ export default function SearchPage() {
 
       setResults({
         teams: teams || [],
-        vehicles: vehicles || [],
         bookings: bookings || [],
       })
     } catch (error) {
@@ -97,13 +79,13 @@ export default function SearchPage() {
     }
   }
 
-  const totalResults = results.teams.length + results.vehicles.length + results.bookings.length
+  const totalResults = results.teams.length + results.bookings.length
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Search</h1>
-        <p className="text-gray-600 mt-1">Find teams, vehicles, and bookings</p>
+        <p className="text-gray-600 mt-1">Find teams and bookings</p>
       </div>
 
       <form onSubmit={handleSearch} className="mb-6">
@@ -111,7 +93,7 @@ export default function SearchPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <Input
             type="text"
-            placeholder="Search teams, vehicles, or scrutineering..."
+            placeholder="Search teams or scrutineering..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search"
@@ -162,38 +144,6 @@ export default function SearchPage() {
                 </Card>
               )}
 
-              {results.vehicles.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Car className="w-5 h-5" />
-                      Vehicles ({results.vehicles.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      {results.vehicles.map((vehicle) => (
-                        <Link
-                          key={vehicle.id}
-                          href={`/vehicles/${vehicle.id}`}
-                          className="block p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-medium">{vehicle.name}</p>
-                              <p className="text-sm text-gray-600">     
-                                {vehicle.teams?.name} {vehicle.chassis_number && `- ${vehicle.chassis_number}`}
-                              </p>
-                            </div>
-                            <Badge variant="outline">{vehicle.status}</Badge>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
               {results.bookings.length > 0 && (
                 <Card>
                   <CardHeader>
@@ -235,7 +185,7 @@ export default function SearchPage() {
       {!query && (
         <Card>
           <CardContent className="p-6 text-center text-gray-500">
-            Enter a search query to find teams, vehicles, or bookings
+            Enter a search query to find teams or bookings
           </CardContent>
         </Card>
       )}

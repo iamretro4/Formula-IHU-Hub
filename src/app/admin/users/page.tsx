@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useEffect, useState, useMemo, useRef } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -19,7 +19,11 @@ type ProfileRole = {
 }
 
 export default function UserManagementPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<UserProfile[]>([])
@@ -27,9 +31,15 @@ export default function UserManagementPage() {
   const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
     const loadData = async () => {
+      if (currentRunId !== effectRunIdRef.current) return
+      setLoading(true)
       try {
         const { data: { user } } = await supabase.auth.getUser()
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (!user) {
           router.push('/auth/signin')
           return
@@ -41,13 +51,16 @@ export default function UserManagementPage() {
           .select('app_role')
           .eq('id', user.id)
           .single() as { data: ProfileRole | null }
-
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (!profile || profile.app_role !== 'admin') {
           router.push('/dashboard')
           return
         }
 
-        setUserRole(profile.app_role)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setUserRole(profile.app_role)
+        }
 
         // Load users
         const { data: usersData, error } = await supabase
@@ -57,7 +70,8 @@ export default function UserManagementPage() {
             teams:team_id(name, code)
           `)
           .order('created_at', { ascending: false })
-
+        
+        if (!active || currentRunId !== effectRunIdRef.current) return
         if (error) throw error
         
         // Transform teams from array to single object if needed
@@ -66,16 +80,23 @@ export default function UserManagementPage() {
           teams: Array.isArray(user.teams) ? user.teams[0] : user.teams
         })) as UserProfile[] || []
         
-        setUsers(transformedUsers)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setUsers(transformedUsers)
+        }
       } catch (error) {
-        console.error('Failed to load users:', error)
-        alert('Failed to load users')
+        if (active && currentRunId === effectRunIdRef.current) {
+          console.error('Failed to load users:', error)
+          alert('Failed to load users')
+        }
       } finally {
-        setLoading(false)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setLoading(false)
+        }
       }
     }
 
     loadData()
+    return () => { active = false }
   }, [supabase, router])
 
   const filteredUsers = users.filter((user) => {

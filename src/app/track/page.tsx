@@ -1,7 +1,8 @@
 'use client'
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,7 +71,11 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function TrackLivePage() {
-  const supabase = createClientComponentClient()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
+  const effectRunIdRef = useRef(0)
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
@@ -139,7 +144,16 @@ export default function TrackLivePage() {
   }, [supabase])
 
   useEffect(() => {
-    fetchAll()
+    const currentRunId = ++effectRunIdRef.current
+    let active = true
+    
+    async function loadData() {
+      if (currentRunId !== effectRunIdRef.current) return
+      await fetchAll()
+    }
+    
+    loadData()
+    return () => { active = false }
   }, [fetchAll])
 
   const visibleRuns = allRuns.filter(run => run.event_type === activeTab)

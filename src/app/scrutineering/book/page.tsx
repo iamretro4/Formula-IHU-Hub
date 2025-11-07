@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -61,53 +62,230 @@ export default function ScrutineeringBookPage() {
   const [selectedTime, setSelectedTime] = useState<string>("")
   const [notes, setNotes] = useState('')
   const [allBookings, setAllBookings] = useState<Booking[]>([])
-  const supabase = createClientComponentClient()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
   const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate()
+  const adminViewTeamRef = useRef<string | null>(null)
+  const effectRunIdRef = useRef(0)
 
-  // Initial load
+  // Set adminViewTeam when profile/teams change (separate effect to avoid dependency cycle)
   useEffect(() => {
-    // Wait for auth to be ready
-    if (authLoading) {
+    if (authLoading || !authProfile) return
+    
+    if (authProfile.app_role === 'admin' && teams.length > 0) {
+      if (!adminViewTeam) {
+        const firstTeamId = teams[0].id
+        setAdminViewTeam(firstTeamId)
+        adminViewTeamRef.current = firstTeamId
+      } else {
+        adminViewTeamRef.current = adminViewTeam
+      }
+    } else if (authProfile.team_id && !adminViewTeam) {
+      setAdminViewTeam(authProfile.team_id)
+      adminViewTeamRef.current = authProfile.team_id
+    } else if (adminViewTeam) {
+      adminViewTeamRef.current = adminViewTeam
+    }
+  }, [authLoading, authProfile, teams, adminViewTeam])
+
+  // Initial load - only depends on auth, not on adminViewTeam to avoid cycles
+  useEffect(() => {
+    // Increment run ID to track this effect execution
+    const currentRunId = ++effectRunIdRef.current
+    // Reset loading state when effect runs
+    setInitialLoading(true)
+    setError(null)
+    
+    // Wait for auth to be ready and profile to be loaded
+    if (authLoading || !user || !authProfile) {
+      if (currentRunId === effectRunIdRef.current) {
+        setInitialLoading(false)
+      }
       return
     }
     
     let active = true
     ;(async () => {
-      setInitialLoading(true)
-      setError(null)
-      
-      if (!user || !authProfile) {
-        setError('Not authenticated'); setInitialLoading(false); return
-      }
-      
-      setUserRole(authProfile.app_role ?? null)
-      if (!authProfile.team_id) {
-        setError('No team profile found. Please complete your profile first.')
-        setInitialLoading(false); return
-      }
+      try {
+        setUserRole(authProfile.app_role ?? null)
+        if (!authProfile.team_id) {
+          if (active && currentRunId === effectRunIdRef.current) {
+            setError('No team profile found. Please complete your profile first.')
+            setInitialLoading(false)
+          }
+          return
+        }
       setTeamId(authProfile.team_id)
+      
+      // Load teams for admin and determine target team
+      let targetTeamId: string | null = null
       if (authProfile.app_role === 'admin') {
         const { data: allTeams } = await supabase.from('teams').select('id, name').order('name')
-        setTeams((allTeams || []) as Team[])
-        if (!adminViewTeam && allTeams && allTeams.length > 0) setAdminViewTeam(allTeams[0].id)
+        if (!active || currentRunId !== effectRunIdRef.current) return
+        const loadedTeams = (allTeams || []) as Team[]
+        setTeams(loadedTeams)
+        // Use adminViewTeam from ref/state if set, otherwise use first team from just-loaded teams
+        targetTeamId = adminViewTeamRef.current ?? adminViewTeam ?? (loadedTeams.length > 0 ? loadedTeams[0].id : null)
+        if (!adminViewTeam && loadedTeams.length > 0) {
+          setAdminViewTeam(loadedTeams[0].id)
+          adminViewTeamRef.current = loadedTeams[0].id
+        }
       } else {
-        setAdminViewTeam(authProfile.team_id)
+        targetTeamId = adminViewTeamRef.current ?? adminViewTeam ?? authProfile.team_id
+        if (!adminViewTeam) {
+          setAdminViewTeam(authProfile.team_id)
+          adminViewTeamRef.current = authProfile.team_id
+        }
       }
+      
+      if (!targetTeamId) {
+        if (active && currentRunId === effectRunIdRef.current) {
+          setInitialLoading(false)
+        }
+        return
+      }
+      
+      // Verify authentication before querying
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (!active || currentRunId !== effectRunIdRef.current) return
+      if (sessionError) {
+        console.error('[Booking] Session error:', sessionError)
+        setError(`Authentication error: ${sessionError.message}`)
+        setInitialLoading(false)
+        return
+      }
+      if (!session) {
+        console.error('[Booking] No active session found')
+        setError('Not authenticated. Please sign in again.')
+        setInitialLoading(false)
+        return
+      }
+      console.log('[Booking] Session verified, user:', session.user.id)
+      
+      console.log('[Booking] Fetching inspection types from database...')
       const { data: types, error: typesError } = await supabase
         .from('inspection_types')
         .select('id, name, duration_minutes, concurrent_slots, prerequisites, active, key')
         .order('sort_order', { ascending: true })
+      if (!active || currentRunId !== effectRunIdRef.current) return
       if (typesError) {
-        setError(typesError.message); setInitialLoading(false); return
+        console.error('[Booking] Error fetching inspection types:', typesError)
+        setError(`Failed to load inspection types: ${typesError.message}`)
+        setInitialLoading(false)
+        return
       }
+      console.log('[Booking] Inspection types query result:', { 
+        count: types?.length || 0, 
+        types: types?.map(t => ({ id: t.id, name: t.name, active: t.active })) 
+      })
+      if (!types || types.length === 0) {
+        console.warn('[Booking] No inspection types found in database')
+        setError('No inspection types found in the database. Please contact an administrator.')
+        setInitialLoading(false)
+        return
+      }
+      
       const { data: teamB, error: bookingsError } = await supabase
         .from('bookings')
         .select('inspection_type_id, status')
-        .eq('team_id', adminViewTeam ?? authProfile.team_id)
+        .eq('team_id', targetTeamId)
+      if (!active || currentRunId !== effectRunIdRef.current) return
       if (bookingsError) {
-        setError(bookingsError.message); setInitialLoading(false); return
+        setError(bookingsError.message)
+        setInitialLoading(false)
+        return
       }
+      
       setTeamBookings((teamB ?? []) as Booking[])
+      if (!active || currentRunId !== effectRunIdRef.current) return
+      
+      console.log('[Booking] Processing inspection types:', types?.length || 0, 'types found')
+      const processedTypes = ((types ?? []) as any[]).map((t: any) => {
+          const passed = (teamB as any[])?.some(
+            (b: any) => b.inspection_type_id === t.id && b.status === 'passed'
+          )
+          let prerequisitesMet = true
+          if (Array.isArray(t.prerequisites) && t.prerequisites.length > 0) {
+            for (const reqKey of t.prerequisites) {
+              const prereqType = ((types ?? []) as any[]).find((tt: any) => tt.key === reqKey)
+              if (prereqType) {
+                const prereqPassed = (teamB as any[])?.some(
+                  (b: any) => b.inspection_type_id === prereqType.id && b.status === 'passed'
+                )
+                if (!prereqPassed) prerequisitesMet = false
+              }
+            }
+          }
+          return {
+            id: t.id,
+            name: t.name,
+            duration_minutes: t.duration_minutes ?? 120,
+            concurrent_slots: t.concurrent_slots ?? 1,
+            prerequisites: t.prerequisites ?? [],
+            key: t.key,
+            active: !!t.active,
+            can_book: !!t.active && prerequisitesMet && !passed,
+            passed: !!passed,
+            subtitle: !prerequisitesMet
+              ? `You must pass: ${(Array.isArray(t.prerequisites) ? t.prerequisites.join(', ') : t.prerequisites)} before booking`
+              : passed
+                ? "Already completed"
+                : undefined
+          }
+        })
+      console.log('[Booking] Processed inspection types:', processedTypes.length)
+      if (active && currentRunId === effectRunIdRef.current) {
+        setInspectionTypes(processedTypes)
+        setInitialLoading(false)
+      }
+      } catch (err) {
+        console.error('[Booking] Unexpected error in initial load:', err)
+        if (active && currentRunId === effectRunIdRef.current) {
+          setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+          setInitialLoading(false)
+        }
+      }
+    })()
+    return () => { 
+      active = false
+      // Don't reset loading state here - let the new effect run handle it
+    }
+  }, [authLoading, user, authProfile, supabase])
+
+  // Reload data when admin changes selected team
+  useEffect(() => {
+    if (authLoading || !user || !authProfile || !adminViewTeam) return
+    if (authProfile.app_role !== 'admin') return // Only for admins
+    
+    let active = true
+    ;(async () => {
+      const targetTeamId = adminViewTeam
+      if (!targetTeamId) return
+      
+      // Verify session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session || !active) return
+      
+      const { data: types, error: typesError } = await supabase
+        .from('inspection_types')
+        .select('id, name, duration_minutes, concurrent_slots, prerequisites, active, key')
+        .order('sort_order', { ascending: true })
+      if (!active) return
+      if (typesError || !types) {
+        console.error('[Booking] Error reloading inspection types:', typesError)
+        return
+      }
+      
+      const { data: teamB } = await supabase
+        .from('bookings')
+        .select('inspection_type_id, status')
+        .eq('team_id', targetTeamId)
+      if (!active) return
+      
+      setTeamBookings((teamB ?? []) as Booking[])
+      
       setInspectionTypes(
         ((types ?? []) as any[]).map((t: any) => {
           const passed = (teamB as any[])?.some(
@@ -143,10 +321,9 @@ export default function ScrutineeringBookPage() {
           }
         })
       )
-      setInitialLoading(false)
     })()
     return () => { active = false }
-  }, [authLoading, user, authProfile, supabase, adminViewTeam])
+  }, [adminViewTeam, authLoading, user, authProfile, supabase])
 
   // Reserved slots for selected inspection type, for today
   useEffect(() => {
@@ -351,6 +528,13 @@ export default function ScrutineeringBookPage() {
         </p>
         {adminTeamSelector}
         <label className="block font-semibold mb-2">1. Select Inspection Type</label>
+        {inspectionTypes.length === 0 && !initialLoading && !error && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-yellow-800 font-medium">No inspection types available.</p>
+            <p className="text-yellow-700 text-sm mt-1">Please check your connection or contact support if this issue persists.</p>
+            <p className="text-yellow-600 text-xs mt-2">Check the browser console for detailed error messages.</p>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4 mb-6">
           {inspectionTypes.map((t) => (
             <button

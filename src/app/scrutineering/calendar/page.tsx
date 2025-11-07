@@ -1,10 +1,11 @@
 'use client'
 import React from "react"
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
+import { Database } from '@/lib/types/database'
 
 type InspectionType = {
   id: string
@@ -80,7 +81,10 @@ export default function ScrutineeringCalendarDay() {
   const [userRole, setUserRole] = useState<string>('')
   const [teamId, setTeamId] = useState<string | null>(null)
   const today = new Date().toISOString().split('T')[0]
-  const supabase = createClientComponentClient()
+  const supabase = useMemo(() => createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  ), [])
   const router = useRouter()
 
   useEffect(() => {
