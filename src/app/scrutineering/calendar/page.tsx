@@ -151,16 +151,18 @@ export default function ScrutineeringCalendarDay() {
             </div>
           )}
           {/* Grid time + types row-by-row */}
-          {grid.map((row, idx) => (
-            <React.Fragment key={`calendar-row-${row[0]}`}>
-              <div key={`calendar-time-${row[0]}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{row[0]}</div>
+          {grid.map((row, idx) => {
+            const timeSlot = row[0] as string
+            return (
+            <React.Fragment key={`calendar-row-${timeSlot}`}>
+              <div key={`calendar-time-${timeSlot}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{timeSlot}</div>
               {row.slice(1).map((booking: Booking | undefined, colIdx) => {
                 const type = inspectionTypes[colIdx]
                 const isBooked = !!booking
                 const isYours = isBooked && booking?.team_id === teamId
                 return (
                   <div
-                    key={`calendar-${row[0]}-${type?.id}-${booking?.id ?? colIdx}`}
+                    key={`calendar-${timeSlot}-${type?.id}-${booking?.id ?? colIdx}`}
                     className={`mb-1 rounded-lg flex flex-col items-center justify-center border shadow-sm px-1.5 py-2 bg-white min-h-[54px] ${
                       isBooked
                         ? (isYours
