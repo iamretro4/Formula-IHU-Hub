@@ -5,13 +5,30 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { Database } from '@/lib/types/database'
 
-type InspectionType = Database['public']['Tables']['inspection_types']['Row']
-type Booking = Database['public']['Tables']['bookings']['Row'] & {
-  teams?: { name: string }[] | null
-  inspection_types?: { name: string }[] | null
-  team?: { name: string }[] | null
+type InspectionType = {
+  id: string
+  name: string
+  duration_minutes: number
+  concurrent_slots: number
+  sort_order: number
+  active: boolean
+  key: string
+  prerequisites?: string[]
+}
+
+type Booking = {
+  id: string
+  inspection_type_id: string
+  team_id: string
+  start_time: string
+  end_time: string
+  resource_index: number
+  status: string
+  date: string
+  teams?: { name: string } | { name: string }[] | null
+  inspection_types?: { name: string } | { name: string }[] | null
+  team?: { name: string } | { name: string }[] | null
 }
 
 const allowedTypes = ['Mechanical', 'Accumulator', 'Electrical']
@@ -32,17 +49,28 @@ function getSlots(startTime: string, endTime: string, duration: number) {
 }
 
 function getTeamName(b: Booking) {
-  return (
-    b.teams?.[0]?.name ||
-    b.team?.[0]?.name ||
-    b.team?.name ||
-    ""
-  )
+  if (!b.teams && !b.team) return ""
+  
+  // Handle array format
+  if (Array.isArray(b.teams) && b.teams[0]?.name) return b.teams[0].name
+  if (Array.isArray(b.team) && b.team[0]?.name) return b.team[0].name
+  
+  // Handle object format
+  if (b.teams && typeof b.teams === 'object' && 'name' in b.teams) return b.teams.name
+  if (b.team && typeof b.team === 'object' && 'name' in b.team) return b.team.name
+  
+  return ""
 }
 
 function getInspectionTypeName(b: Booking) {
-  if (Array.isArray(b.inspection_types)) return b.inspection_types[0]?.name || ""
-  if (b.inspection_types && typeof b.inspection_types === 'object') return b.inspection_types.name || ""
+  if (!b.inspection_types) return ""
+  
+  if (Array.isArray(b.inspection_types) && b.inspection_types[0]?.name) {
+    return b.inspection_types[0].name
+  }
+  if (typeof b.inspection_types === 'object' && 'name' in b.inspection_types) {
+    return b.inspection_types.name
+  }
   return ""
 }
 
@@ -52,7 +80,7 @@ export default function ScrutineeringCalendarDay() {
   const [userRole, setUserRole] = useState<string>('')
   const [teamId, setTeamId] = useState<string | null>(null)
   const today = new Date().toISOString().split('T')[0]
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClientComponentClient()
   const router = useRouter()
 
   useEffect(() => {
@@ -71,13 +99,14 @@ export default function ScrutineeringCalendarDay() {
         .from('inspection_types')
         .select('*')
         .order('sort_order')
-      setInspectionTypes((types ?? []).filter(t => allowedTypes.includes(t.name)))
+      const typedTypes = (types ?? []) as InspectionType[]
+      setInspectionTypes(typedTypes.filter(t => allowedTypes.includes(t.name)))
 
       const { data: bookings } = await supabase
         .from('bookings')
         .select('id, inspection_type_id, team_id, start_time, end_time, resource_index, status, date, teams(name), inspection_types(name)')
         .eq('date', today)
-      setAllBookings(bookings ?? [])
+      setAllBookings((bookings ?? []) as unknown as Booking[])
     })()
     return () => { active = false }
   }, [supabase, today])

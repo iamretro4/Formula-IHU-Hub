@@ -3,6 +3,10 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 
+type ProfileRole = {
+  app_role: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies })
@@ -17,7 +21,7 @@ export async function GET(request: NextRequest) {
       .from('user_profiles')
       .select('app_role')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileRole | null }
 
     const { searchParams } = new URL(request.url)
     const role = searchParams.get('role')
@@ -33,7 +37,9 @@ export async function GET(request: NextRequest) {
     // Only admins can see all users
     if (profile?.app_role !== 'admin') {
       // Non-admins see limited info
-      query = query.select('id, first_name, last_name, app_role')
+      query = supabase
+        .from('user_profiles')
+        .select('id, first_name, last_name, app_role')
     }
 
     const { data: users, error } = await query.order('created_at', { ascending: false })

@@ -5,32 +5,82 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { FaRegCommentDots, FaFilePdf, FaUndo } from 'react-icons/fa'
 import { Loader2 } from 'lucide-react'
 import { jsPDF } from 'jspdf'
-import { Database } from '@/lib/types/database'
 
-type Booking = Database['public']['Tables']['bookings']['Row'] & {
-  inspection_types?: { name: string } | null;
-  teams?: { name: string; code: string } | null;
-  inspection_results?: { status: string, completed_at?: string }[] | null;
+type Team = {
+  name: string
+  code: string
 }
-type ChecklistTemplate = Database['public']['Tables']['checklist_templates']['Row']
-type InspectionProgress = Database['public']['Tables']['inspection_progress']['Row'] & {
-  user_profiles?: { first_name: string; last_name: string, app_role?: string } | null;
+
+type InspectionType = {
+  name: string
 }
+
+type InspectionResult = {
+  status: string
+  completed_at?: string
+}
+
+type Booking = {
+  id: string
+  team_id: string
+  inspection_type_id: string
+  date: string
+  start_time: string
+  end_time: string
+  status: string
+  completed_at?: string
+  inspection_types?: InspectionType | null
+  teams?: Team | null
+  inspection_results?: InspectionResult[] | null
+}
+
+type ChecklistTemplate = {
+  id: string
+  inspection_type_id: string
+  section: string
+  description: string
+  order_index: number
+  required: boolean
+}
+
+type UserProfile = {
+  id: string
+  first_name: string
+  last_name: string
+  app_role: string
+  email?: string
+}
+
+type InspectionProgress = {
+  id: string
+  booking_id: string
+  item_id: string
+  user_id: string
+  checked_at: string | null
+  status: string | null
+  comment: string
+  locked: boolean
+  user_profiles?: UserProfile | null
+}
+
 type InspectionComment = {
-  id: string;
-  booking_id: string;
-  item_id: string;
-  user_id: string;
-  comment: string;
-  created_at: string;
-  user_profiles?: { first_name: string; last_name: string } | null;
+  id: string
+  booking_id: string
+  item_id: string
+  user_id: string
+  comment: string
+  created_at: string
+  user_profiles?: {
+    first_name: string
+    last_name: string
+  } | null
 }
-type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
 export default function ChecklistBookingPage() {
-  const { bookingId } = useParams<{ bookingId: string }>()
+  const params = useParams<{ bookingId: string }>()
+  const bookingId = params?.bookingId
   const router = useRouter()
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClientComponentClient()
   const [booking, setBooking] = useState<Booking | null>(null)
   const [checklist, setChecklist] = useState<ChecklistTemplate[]>([])
   const [status, setStatus] = useState<Record<string, InspectionProgress>>({})
@@ -54,12 +104,13 @@ export default function ChecklistBookingPage() {
         // User and profile
         const { data: { user: authUser }, error: userError } = await supabase.auth.getUser()
         if (userError) throw userError
+        if (!authUser) throw new Error('User not authenticated')
         if (authUser) {
           const { data: userProfile, error: profileError } = await supabase.from('user_profiles').select('*').eq('id', authUser.id).single()
           if (profileError) throw profileError
-          setUser(userProfile)
-          setRole(userProfile.app_role)
-          setReadonly(['team_leader', 'team_member'].includes(userProfile.app_role))
+          setUser(userProfile as UserProfile)
+          setRole(userProfile?.app_role || '')
+          setReadonly(['team_leader', 'team_member'].includes(userProfile?.app_role || ''))
         }
         // Booking & base info
         const { data: bookingData, error: bookingError } = await supabase
@@ -68,16 +119,16 @@ export default function ChecklistBookingPage() {
           .eq('id', bookingId)
           .single()
         if (bookingError) throw bookingError
-        setBooking(bookingData)
+        setBooking(bookingData as unknown as Booking)
         // Checklist items
         const { data: items, error: itemsError } = await supabase
           .from('checklist_templates')
           .select('*')
-          .eq('inspection_type_id', bookingData?.inspection_type_id || '')
+          .eq('inspection_type_id', (bookingData as any)?.inspection_type_id || '')
           .order('section')
           .order('order_index')
         if (itemsError) throw itemsError
-        setChecklist(items ?? [])
+        setChecklist((items ?? []) as ChecklistTemplate[])
         // Progress
         const { data: progress, error: progressError } = await supabase
           .from('inspection_progress')
@@ -85,7 +136,7 @@ export default function ChecklistBookingPage() {
           .eq('booking_id', bookingId)
         if (progressError) throw progressError
         const s: Record<string, InspectionProgress> = {}
-        for (const rec of progress ?? []) s[rec.item_id] = rec
+        for (const rec of (progress ?? []) as any[]) s[rec.item_id] = rec as InspectionProgress
         setStatus(s)
         // Comments
         const { data: comms, error: commentsErr } = await supabase
@@ -94,9 +145,9 @@ export default function ChecklistBookingPage() {
           .eq('booking_id', bookingId)
         if (commentsErr) throw commentsErr
         const perItem: Record<string, InspectionComment[]> = {}
-        for (const c of comms ?? []) {
+        for (const c of (comms ?? []) as any[]) {
           if (!perItem[c.item_id]) perItem[c.item_id] = []
-          perItem[c.item_id].push(c)
+          perItem[c.item_id].push(c as InspectionComment)
         }
         setComments(perItem)
       } catch (err: unknown) {
@@ -115,7 +166,7 @@ export default function ChecklistBookingPage() {
 
   useEffect(() => {
     if (booking && booking.status && booking.status !== 'ongoing' && !readonly) {
-      supabase.from('bookings').update({ status: 'ongoing' }).eq('id', booking.id)
+      supabase.from('bookings').update({ status: 'ongoing' } as any).eq('id', booking.id)
     }
   }, [booking, supabase, readonly])
 
@@ -142,7 +193,7 @@ export default function ChecklistBookingPage() {
     try {
       const { error } = await supabase
         .from('inspection_progress')
-        .upsert([payload], { onConflict: 'booking_id,item_id', ignoreDuplicates: false })
+        .upsert([payload as any], { onConflict: 'booking_id,item_id', ignoreDuplicates: false })
       if (error) {
         setError('Failed to save. Please check your permissions and RLS settings. ' + error.message)
         return
@@ -173,7 +224,7 @@ export default function ChecklistBookingPage() {
         user_id: user?.id,
         comment: commentDraft,
         created_at: new Date().toISOString()
-      })
+      } as any)
       setCommenting(null)
       setCommentDraft('')
       setError(null)
@@ -202,7 +253,7 @@ export default function ChecklistBookingPage() {
       user_profiles?: { first_name?: string; last_name?: string } | null
       user_id?: string
     }
-    (progress as ProgressItem[])?.forEach((p, i: number) => {
+    ((progress ?? []) as ProgressItem[]).forEach((p, i: number) => {
       doc.text(
         `${i + 1}. ${p.item_id} (${p.status ?? '-'}) - ${p.user_profiles?.first_name ?? ''} ${p.user_profiles?.last_name ?? ''}`,
         10, 60 + i * 7
@@ -222,7 +273,7 @@ export default function ChecklistBookingPage() {
     try {
       await supabase
         .from('bookings')
-        .update({ status: 'completed', completed_at: new Date().toISOString() })
+        .update({ status: 'completed', completed_at: new Date().toISOString() } as any)
         .eq('id', bookingId)
       await supabase
         .from('inspection_results')
@@ -231,10 +282,10 @@ export default function ChecklistBookingPage() {
           status: passed ? 'passed' : 'failed',
           completed_at: new Date().toISOString(),
           scrutineer_ids: user ? [user.id] : []
-        }])
+        } as any])
       await supabase
         .from('inspection_progress')
-        .update({ locked: true })
+        .update({ locked: true } as any)
         .eq('booking_id', bookingId)
       setError(null)
       alert(`Inspection marked as ${passed ? 'Passed' : 'Failed'}!`)
@@ -258,11 +309,11 @@ export default function ChecklistBookingPage() {
     try {
       await supabase
         .from('inspection_results')
-        .update({ status: 'failed', completed_at: null })
+        .update({ status: 'failed', completed_at: null } as any)
         .eq('booking_id', bookingId)
       await supabase
         .from('inspection_progress')
-        .update({ status: 'failed', comment: null, locked: false })
+        .update({ status: 'failed', comment: null, locked: false } as any)
         .eq('booking_id', bookingId)
       router.replace(`/scrutineering/live/${bookingId}`)
     } catch (err) {
@@ -378,7 +429,7 @@ export default function ChecklistBookingPage() {
                           Checked by{' '}
                           <b>
                             {status[item.id]?.user_profiles
-                              ? `${status[item.id].user_profiles.first_name} ${status[item.id].user_profiles.last_name} (${status[item.id].user_profiles.app_role})`
+                              ? `${status[item.id].user_profiles?.first_name} ${status[item.id].user_profiles?.last_name} (${status[item.id].user_profiles?.app_role})`
                               : user?.email || user?.id}
                           </b>{' '}
                           at {new Date(status[item.id].checked_at as string).toLocaleString()}

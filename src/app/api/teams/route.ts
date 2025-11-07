@@ -4,6 +4,16 @@ import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 import { teamSchema } from '@/lib/validators'
 
+type ProfileWithTeam = {
+  app_role: string
+  team_id: string | null
+}
+
+type ProfileRole = {
+  app_role: string
+  team_id?: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies })
@@ -18,7 +28,7 @@ export async function GET(request: NextRequest) {
       .from('user_profiles')
       .select('app_role, team_id')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileWithTeam | null }
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
@@ -84,9 +94,9 @@ export async function POST(request: NextRequest) {
     // Get user profile to check role
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('app_role')
+      .select('app_role, team_id')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileRole | null }
 
     // Only team users and admins can create teams
     if (profile?.app_role !== 'admin' && 
@@ -98,11 +108,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = teamSchema.parse(body)
 
+    // Generate code from team name (first 3 letters uppercase)
+    const teamCode = validatedData.name.substring(0, 3).toUpperCase()
+
     // Check if team name or code already exists
     const { data: existingTeam } = await supabase
       .from('teams')
       .select('id')
-      .or(`name.eq.${validatedData.name},code.eq.${validatedData.code || validatedData.name.substring(0, 3).toUpperCase()}`)
+      .or(`name.eq.${validatedData.name},code.eq.${teamCode}`)
       .single()
 
     if (existingTeam) {
@@ -112,10 +125,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate code if not provided
-    const teamCode = validatedData.code || validatedData.name.substring(0, 3).toUpperCase()
-
-    const { data: team, error } = await supabase
+    const insertResult = await supabase
       .from('teams')
       .insert({
         name: validatedData.name,
@@ -123,9 +133,12 @@ export async function POST(request: NextRequest) {
         country: validatedData.country || null,
         contact_email: validatedData.contactEmail,
         contact_phone: validatedData.contactPhone || null,
-      })
+      } as any)
       .select()
       .single()
+
+    const team = (insertResult as any).data
+    const error = (insertResult as any).error
 
     if (error) {
       console.error('Teams POST error:', error)
@@ -136,10 +149,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update user's team_id if they don't have one
-    if (profile && !profile.team_id) {
+    if (profile && !profile.team_id && team) {
       await supabase
         .from('user_profiles')
-        .update({ team_id: team.id })
+        .update({ team_id: team.id } as never)
         .eq('id', user.id)
     }
 

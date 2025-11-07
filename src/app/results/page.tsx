@@ -5,6 +5,39 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 
+type OverallResult = {
+  team_code: string
+  team_name: string
+  vehicle_class: string
+  total_points: number
+  acceleration_points: number
+  skidpad_points: number
+  autocross_points: number
+  endurance_points: number
+  efficiency_points: number
+  design_points: number
+  cost_points: number
+  business_points: number
+}
+
+type DynamicResult = {
+  team_code: string
+  team_name: string
+  vehicle_class: string
+  event_type: string
+  best_corrected_time: number | null
+  best_raw_time: number | null
+  points: number | null
+}
+
+type StaticResult = {
+  team_code: string
+  team_name: string
+  vehicle_class: string
+  static_event: string
+  total_score: number | null
+}
+
 const DYNAMIC_EVENTS = [
   { key: 'acceleration', label: 'Acceleration' },
   { key: 'skidpad', label: 'Skidpad' },
@@ -22,10 +55,10 @@ const VEHICLE_CLASSES = ['EV', 'CV']
 export default function ResultsPage() {
   const supabase = createClientComponentClient()
   const [loading, setLoading] = useState(false)
-  const [overallEV, setOverallEV] = useState([])
-  const [overallCV, setOverallCV] = useState([])
-  const [dynEvent, setDynEvent] = useState({ EV: {}, CV: {} })
-  const [staticEvent, setStaticEvent] = useState({ EV: {}, CV: {} })
+  const [overallEV, setOverallEV] = useState<OverallResult[]>([])
+  const [overallCV, setOverallCV] = useState<OverallResult[]>([])
+  const [dynEvent, setDynEvent] = useState<{ EV: Record<string, DynamicResult[]>, CV: Record<string, DynamicResult[]> }>({ EV: {}, CV: {} })
+  const [staticEvent, setStaticEvent] = useState<{ EV: Record<string, StaticResult[]>, CV: Record<string, StaticResult[]> }>({ EV: {}, CV: {} })
   const [activeTab, setActiveTab] = useState('overall_ev')
   const [activeDynEvTab, setActiveDynEvTab] = useState('acceleration')
   const [activeDynCvTab, setActiveDynCvTab] = useState('acceleration')
@@ -40,16 +73,16 @@ export default function ResultsPage() {
         .from('overall_results_per_class')
         .select('*')
         .eq('vehicle_class', 'EV')
-      setOverallEV(overallEV || [])
+      setOverallEV((overallEV || []) as OverallResult[])
       const { data: overallCV } = await supabase
         .from('overall_results_per_class')
         .select('*')
         .eq('vehicle_class', 'CV')
-      setOverallCV(overallCV || [])
+      setOverallCV((overallCV || []) as OverallResult[])
 
       // Dynamic events by class/event
-      let dynEventResultsEV = {}
-      let dynEventResultsCV = {}
+      let dynEventResultsEV: Record<string, DynamicResult[]> = {}
+      let dynEventResultsCV: Record<string, DynamicResult[]> = {}
       for (let ev of DYNAMIC_EVENTS) {
         const evKey = ev.key
         const { data: evEV } = await supabase
@@ -57,19 +90,19 @@ export default function ResultsPage() {
           .select('*')
           .eq('vehicle_class', 'EV')
           .eq('event_type', evKey)
-        dynEventResultsEV[evKey] = evEV || []
+        dynEventResultsEV[evKey] = (evEV || []) as DynamicResult[]
         const { data: evCV } = await supabase
           .from('dynamic_event_leaderboard')
           .select('*')
           .eq('vehicle_class', 'CV')
           .eq('event_type', evKey)
-        dynEventResultsCV[evKey] = evCV || []
+        dynEventResultsCV[evKey] = (evCV || []) as DynamicResult[]
       }
       setDynEvent({ EV: dynEventResultsEV, CV: dynEventResultsCV })
 
       // Static (judged) events by class/event
-      let staticEventResultsEV = {}
-      let staticEventResultsCV = {}
+      let staticEventResultsEV: Record<string, StaticResult[]> = {}
+      let staticEventResultsCV: Record<string, StaticResult[]> = {}
       for (let ev of STATIC_EVENTS) {
         const evKey = ev.key
         const { data: statEV } = await supabase
@@ -77,13 +110,13 @@ export default function ResultsPage() {
           .select('*')
           .eq('vehicle_class', 'EV')
           .eq('static_event', evKey)
-        staticEventResultsEV[evKey] = statEV || []
+        staticEventResultsEV[evKey] = (statEV || []) as StaticResult[]
         const { data: statCV } = await supabase
           .from('static_event_aggregate')
           .select('*')
           .eq('vehicle_class', 'CV')
           .eq('static_event', evKey)
-        staticEventResultsCV[evKey] = statCV || []
+        staticEventResultsCV[evKey] = (statCV || []) as StaticResult[]
       }
       setStaticEvent({ EV: staticEventResultsEV, CV: staticEventResultsCV })
 
@@ -93,7 +126,7 @@ export default function ResultsPage() {
   }, [supabase])
 
   // --- Renders ---
-  function renderOverallTable(rows) {
+  function renderOverallTable(rows: OverallResult[]) {
     return (
       <table className="w-full table-auto border border-gray-300 text-sm">
         <thead>
@@ -135,7 +168,7 @@ export default function ResultsPage() {
     )
   }
 
-  function renderDynamicTable(rows) {
+  function renderDynamicTable(rows: DynamicResult[]) {
     return (
       <table className="w-full table-auto border border-gray-300 text-sm">
         <thead>
@@ -165,7 +198,7 @@ export default function ResultsPage() {
     )
   }
 
-  function renderStaticTable(rows) {
+  function renderStaticTable(rows: StaticResult[]) {
     return (
       <table className="w-full table-auto border border-gray-300 text-sm">
         <thead>

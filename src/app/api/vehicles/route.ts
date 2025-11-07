@@ -4,6 +4,11 @@ import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 import { vehicleSchema } from '@/lib/validators'
 
+type ProfileWithTeam = {
+  app_role: string
+  team_id: string | null
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies })
@@ -18,7 +23,7 @@ export async function GET(request: NextRequest) {
       .from('user_profiles')
       .select('app_role, team_id')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileWithTeam | null }
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
@@ -85,7 +90,7 @@ export async function POST(request: NextRequest) {
       .from('user_profiles')
       .select('app_role, team_id')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileWithTeam | null }
 
     // Only team users and admins can create vehicles
     if (profile?.app_role !== 'admin' && 
@@ -122,14 +127,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { data: vehicle, error } = await supabase
+    const insertResult = await supabase
       .from('vehicles')
       .insert({
         ...validatedData,
         team_id: teamId || profile?.team_id,
-      })
+      } as any)
       .select('*, teams(id, name, code, country)')
       .single()
+
+    const vehicle = (insertResult as any).data
+    const error = (insertResult as any).error
 
     if (error) {
       console.error('Vehicles POST error:', error)

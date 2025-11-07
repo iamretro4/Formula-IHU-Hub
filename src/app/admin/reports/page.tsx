@@ -8,6 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Download, TrendingUp, Calendar, Users, ClipboardCheck } from 'lucide-react'
 import { Database } from '@/lib/types/database'
 
+type UserProfile = {
+  app_role: string
+}
+
+type InspectionResult = {
+  status: string
+}
+
 export default function SystemReportsPage() {
   const supabase = createClientComponentClient<Database>()
   const router = useRouter()
@@ -36,7 +44,7 @@ export default function SystemReportsPage() {
           .from('user_profiles')
           .select('app_role')
           .eq('id', user.id)
-          .single()
+          .single() as { data: UserProfile | null }
 
         if (!profile || !['admin', 'scrutineer'].includes(profile.app_role || '')) {
           router.push('/dashboard')
@@ -68,8 +76,9 @@ export default function SystemReportsPage() {
           supabase.from('inspection_results').select('status'),
         ])
 
-        const totalResults = resultsResult.data?.length || 0
-        const passedResults = resultsResult.data?.filter((r) => r.status === 'passed').length || 0
+        const inspectionResults = resultsResult.data as InspectionResult[] | null
+        const totalResults = inspectionResults?.length || 0
+        const passedResults = inspectionResults?.filter((r) => r.status === 'passed').length || 0
         const passRate = totalResults > 0 ? ((passedResults / totalResults) * 100).toFixed(1) : '0'
 
         setReports({
@@ -91,7 +100,6 @@ export default function SystemReportsPage() {
   }, [supabase, router])
 
   const handleExport = () => {
-    // Simple alert instead of toast
     alert('Export functionality coming soon')
   }
 

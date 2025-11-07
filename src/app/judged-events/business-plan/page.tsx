@@ -14,7 +14,56 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
-import { Database, JudgedEventBooking, JudgedEventCriterion, JudgedEventScore, ScoreStatus, UserProfile } from '@/lib/types/database'
+
+type ScoreStatus = 'pending' | 'approved' | 'rejected'
+
+type UserProfile = {
+  id: string
+  app_role: string
+  first_name: string
+  last_name: string
+}
+
+type Team = {
+  id: string
+  code: string
+  name: string
+}
+
+type JudgedEventBooking = {
+  id: string
+  event_id: string
+  team_id: string
+  scheduled_time?: string
+  teams?: Team
+}
+
+type JudgedEventCriterion = {
+  id: string
+  event_id: string
+  title: string
+  max_score: number
+  criterion_index: number
+}
+
+type JudgedEventScore = {
+  id: string
+  booking_id: string
+  criterion_id: string
+  judge_id: string
+  score: number | null
+  comment?: string
+  submitted_at: string
+  status: ScoreStatus
+  judged_event_bookings?: {
+    teams?: Team
+  }
+  user_profiles?: {
+    first_name: string
+    last_name: string
+    app_role: string
+  }
+}
 
 const eventId = 'c583211f-3831-4696-9ad6-5dc23bce91a8' // Business Plan Event UUID
 
@@ -30,8 +79,9 @@ const scoringFormSchema = z.object({
 type ScoringFormData = z.infer<typeof scoringFormSchema>;
 
 export default function BusinessPlanScore() {
-  const { bookingId: paramBookingId } = useParams<{ bookingId: string }>()
-  const supabase = createClientComponentClient<Database>()
+  const params = useParams<{ bookingId: string }>()
+  const paramBookingId = params?.bookingId
+  const supabase = createClientComponentClient()
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
   const [criteria, setCriteria] = useState<JudgedEventCriterion[]>([])
@@ -68,13 +118,14 @@ export default function BusinessPlanScore() {
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError) throw userError;
+        if (!user) throw new Error('User not authenticated');
         const { data: profileData, error: profileError } = await supabase
           .from('user_profiles')
           .select('id, app_role, first_name, last_name')
           .eq('id', user.id)
-          .single()
+          .single() as { data: UserProfile | null, error: any }
         if (profileError) throw profileError;
-        setCurrentUser(profileData as UserProfile);
+        setCurrentUser(profileData);
 
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('judged_event_bookings')
@@ -82,7 +133,7 @@ export default function BusinessPlanScore() {
           .eq('event_id', eventId)
           .order('scheduled_time');
         if (bookingsError) throw bookingsError;
-        setBookings(bookingsData || []);
+        setBookings((bookingsData || []) as JudgedEventBooking[]);
 
         const { data: criteriaData, error: criteriaError } = await supabase
           .from('judged_event_criteria')
@@ -90,14 +141,14 @@ export default function BusinessPlanScore() {
           .eq('event_id', eventId)
           .order('criterion_index');
         if (criteriaError) throw criteriaError;
-        setCriteria(criteriaData || []);
+        setCriteria((criteriaData || []) as JudgedEventCriterion[]);
 
-        const criterionIds = criteriaData?.map(c => c.id) || [];
+        const criterionIds = criteriaData?.map((c: any) => c.id) || [];
         let allScoresQuery = supabase
           .from('judged_event_scores')
           .select(`
-            id, score, comment, judge_id, criterion_id, status, submitted_at,
-            judged_event_bookings(teams:team_id(name, code)),
+            id, score, comment, judge_id, criterion_id, status, submitted_at, booking_id,
+            judged_event_bookings(team_id, teams:team_id(name, code)),
             user_profiles(first_name, last_name, app_role)
           `);
         if (criterionIds.length > 0) {
@@ -106,7 +157,7 @@ export default function BusinessPlanScore() {
         const { data: allScores, error: allScoresError } = await allScoresQuery
           .order('submitted_at', { ascending: false });
         if (allScoresError) throw allScoresError;
-        setSubmittedScores(allScores || []);
+        setSubmittedScores((allScores || []) as unknown as JudgedEventScore[]);
       } catch (err) {
         console.error('Error loading initial data:', err);
         setError(err instanceof Error ? err.message : 'Failed to load initial data.');
@@ -121,6 +172,8 @@ export default function BusinessPlanScore() {
     if (selectedBookingId && criteria.length > 0 && currentUser) {
       setError(null);
       async function loadScoresForBooking() {
+        if (!currentUser) return;
+        
         const { data: existingScores, error: scoresError } = await supabase
           .from('judged_event_scores')
           .select('*')
@@ -130,7 +183,7 @@ export default function BusinessPlanScore() {
         if (scoresError) throw scoresError;
 
         const initialScores = criteria.map(criterion => {
-          const existing = existingScores?.find(s => s.criterion_id === criterion.id);
+          const existing = (existingScores as any[])?.find((s: any) => s.criterion_id === criterion.id);
           return {
             criterion_id: criterion.id,
             score: existing?.score ?? null,
@@ -156,7 +209,7 @@ export default function BusinessPlanScore() {
   // === Role Logic ===
   const role = currentUser?.app_role;
   const judgeRoles = ['bp_judge'];
-  const canScore = judgeRoles.includes(role) || role === 'admin';
+  const canScore = judgeRoles.includes(role || '') || role === 'admin';
   const canEditAll = role === 'admin' || role === 'bp_judge';
   const canViewOnly = role === 'team_leader' || role === 'viewer';
 
@@ -186,7 +239,7 @@ export default function BusinessPlanScore() {
       });
       const { error: upsertError } = await supabase
         .from('judged_event_scores')
-        .upsert(payload, { onConflict: 'booking_id,criterion_id,judge_id' });
+        .upsert(payload as any, { onConflict: 'booking_id,criterion_id,judge_id' });
       if (upsertError) throw upsertError;
 
       setSuccessMessage('Scores saved successfully!');
@@ -202,11 +255,11 @@ export default function BusinessPlanScore() {
 
   // === Approve, Reject, Edit handlers ===
   async function handleApprove(id: string) {
-    await supabase.from('judged_event_scores').update({ status: 'approved' }).eq('id', id)
+    await supabase.from('judged_event_scores').update({ status: 'approved' } as any).eq('id', id)
     refreshScoresPanel()
   }
   async function handleReject(id: string) {
-    await supabase.from('judged_event_scores').update({ status: 'rejected' }).eq('id', id)
+    await supabase.from('judged_event_scores').update({ status: 'rejected' } as any).eq('id', id)
     refreshScoresPanel()
   }
   function handleEdit(score: JudgedEventScore) {
@@ -215,7 +268,7 @@ export default function BusinessPlanScore() {
   }
   async function handleSaveEdit() {
     if (editingScore && editValue != null) {
-      await supabase.from('judged_event_scores').update({ score: editValue }).eq('id', editingScore.id)
+      await supabase.from('judged_event_scores').update({ score: editValue } as any).eq('id', editingScore.id)
       setEditingScore(null)
       setEditValue(null)
       refreshScoresPanel()
@@ -224,13 +277,13 @@ export default function BusinessPlanScore() {
   async function refreshScoresPanel() {
     const criterionIds = criteria?.map(c => c.id) || [];
     let updatedScoresQuery = supabase.from('judged_event_scores')
-      .select(`id, score, comment, judge_id, criterion_id, status, submitted_at, judged_event_bookings(teams:team_id(name)), user_profiles(first_name, last_name, app_role)`);
+      .select(`id, score, comment, judge_id, criterion_id, status, submitted_at, booking_id, judged_event_bookings(team_id, teams:team_id(name, code)), user_profiles(first_name, last_name, app_role)`);
     if (criterionIds.length > 0) {
       updatedScoresQuery = updatedScoresQuery.in('criterion_id', criterionIds);
     }
     const { data: updatedSubmittedScores } = await updatedScoresQuery
       .order('submitted_at', { ascending: false });
-    setSubmittedScores(updatedSubmittedScores || []);
+    setSubmittedScores((updatedSubmittedScores || []) as unknown as JudgedEventScore[]);
   }
 
   const getStatusBadgeVariant = (status: ScoreStatus) => {
@@ -270,7 +323,7 @@ export default function BusinessPlanScore() {
                   <SelectContent>
                     {bookings.map((booking) => (
                       <SelectItem key={booking.id} value={booking.id}>
-                        {booking.teams?.code} - {booking.teams?.name} ({new Date(booking.scheduled_time!).toLocaleString()})
+                        {booking.teams?.code} - {booking.teams?.name} ({booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleString() : 'N/A'})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -334,11 +387,11 @@ export default function BusinessPlanScore() {
                     </div>
                     <div className="flex flex-col items-center gap-1">
                       <Badge variant={getStatusBadgeVariant(scoreEntry.status)}>{scoreEntry.status?.toUpperCase()}</Badge>
-                      <Button size="xs" variant="default" onClick={() => handleApprove(scoreEntry.id)} disabled={scoreEntry.status === 'approved'}><ThumbsUp size={14}/> Approve</Button>
-                      <Button size="xs" variant="destructive" onClick={() => handleReject(scoreEntry.id)} disabled={scoreEntry.status === 'rejected'}><ThumbsDown size={14}/> Reject</Button>
-                      <Button size="xs" variant="secondary" onClick={() => handleEdit(scoreEntry)}><Edit size={14}/> Edit</Button>
+                      <Button size="sm" variant="default" onClick={() => handleApprove(scoreEntry.id)} disabled={scoreEntry.status === 'approved'}><ThumbsUp size={14}/> Approve</Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleReject(scoreEntry.id)} disabled={scoreEntry.status === 'rejected'}><ThumbsDown size={14}/> Reject</Button>
+                      <Button size="sm" variant="secondary" onClick={() => handleEdit(scoreEntry)}><Edit size={14}/> Edit</Button>
                       {editingScore?.id === scoreEntry.id && (
-                        <Button size="xs" variant="default" onClick={handleSaveEdit}>Save</Button>
+                        <Button size="sm" variant="default" onClick={handleSaveEdit}>Save</Button>
                       )}
                     </div>
                   </div>

@@ -8,11 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Loader2, Search, Edit, Trash2, Plus } from 'lucide-react'
-import toast from 'react-hot-toast'
 import { Database } from '@/lib/types/database'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'] & {
   teams?: { name: string; code: string } | null
+}
+
+type ProfileRole = {
+  app_role: string
 }
 
 export default function UserManagementPage() {
@@ -37,7 +40,7 @@ export default function UserManagementPage() {
           .from('user_profiles')
           .select('app_role')
           .eq('id', user.id)
-          .single()
+          .single() as { data: ProfileRole | null }
 
         if (!profile || profile.app_role !== 'admin') {
           router.push('/dashboard')
@@ -56,10 +59,17 @@ export default function UserManagementPage() {
           .order('created_at', { ascending: false })
 
         if (error) throw error
-        setUsers(usersData || [])
+        
+        // Transform teams from array to single object if needed
+        const transformedUsers = (usersData as any[])?.map((user: any) => ({
+          ...user,
+          teams: Array.isArray(user.teams) ? user.teams[0] : user.teams
+        })) as UserProfile[] || []
+        
+        setUsers(transformedUsers)
       } catch (error) {
         console.error('Failed to load users:', error)
-        toast.error('Failed to load users')
+        alert('Failed to load users')
       } finally {
         setLoading(false)
       }
@@ -161,7 +171,7 @@ export default function UserManagementPage() {
                     <td className="py-3 px-4">
                       <div className="flex items-center space-x-2">
                         <button
-                          onClick={() => toast.info('Edit functionality coming soon')}
+                          onClick={() => alert('Edit functionality coming soon')}
                           className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
                         >
                           <Edit className="w-4 h-4" />
@@ -183,4 +193,3 @@ export default function UserManagementPage() {
     </div>
   )
 }
-

@@ -2,7 +2,6 @@
 import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { useAuth } from '@/hooks/useAuth'
-import { Database } from '@/lib/types/database'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2, Info, ArrowLeft, Trash2 } from 'lucide-react'
@@ -23,8 +22,27 @@ type InspectionTypeCard = {
   subtitle?: string
 }
 
-type Team = Database['public']['Tables']['teams']['Row']
-type Booking = Database['public']['Tables']['bookings']['Row']
+type Team = {
+  id: string
+  name: string
+}
+
+type Booking = {
+  id: string
+  team_id: string
+  inspection_type_id: string
+  date: string
+  start_time: string
+  end_time: string
+  resource_index: number
+  status: string
+  notes?: string
+  is_rescrutineering: boolean
+  created_by: string
+  teams?: {
+    name: string
+  }
+}
 
 export default function ScrutineeringBookPage() {
   const { user, profile: authProfile, loading: authLoading } = useAuth()
@@ -43,7 +61,7 @@ export default function ScrutineeringBookPage() {
   const [selectedTime, setSelectedTime] = useState<string>("")
   const [notes, setNotes] = useState('')
   const [allBookings, setAllBookings] = useState<Booking[]>([])
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClientComponentClient()
   const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate()
 
   // Initial load
@@ -70,8 +88,8 @@ export default function ScrutineeringBookPage() {
       setTeamId(authProfile.team_id)
       if (authProfile.app_role === 'admin') {
         const { data: allTeams } = await supabase.from('teams').select('id, name').order('name')
-        setTeams(allTeams || [])
-        if (!adminViewTeam && allTeams?.length > 0) setAdminViewTeam(allTeams[0].id)
+        setTeams((allTeams || []) as Team[])
+        if (!adminViewTeam && allTeams && allTeams.length > 0) setAdminViewTeam(allTeams[0].id)
       } else {
         setAdminViewTeam(authProfile.team_id)
       }
@@ -89,19 +107,19 @@ export default function ScrutineeringBookPage() {
       if (bookingsError) {
         setError(bookingsError.message); setInitialLoading(false); return
       }
-      setTeamBookings(teamB ?? [])
+      setTeamBookings((teamB ?? []) as Booking[])
       setInspectionTypes(
-        (types ?? []).map((t: InspectionTypeCard) => {
-          const passed = teamB?.some(
-            (b: Booking) => b.inspection_type_id === t.id && b.status === 'passed'
+        ((types ?? []) as any[]).map((t: any) => {
+          const passed = (teamB as any[])?.some(
+            (b: any) => b.inspection_type_id === t.id && b.status === 'passed'
           )
           let prerequisitesMet = true
           if (Array.isArray(t.prerequisites) && t.prerequisites.length > 0) {
             for (const reqKey of t.prerequisites) {
-              const prereqType = (types ?? []).find((tt: InspectionTypeCard) => tt.key === reqKey)
+              const prereqType = ((types ?? []) as any[]).find((tt: any) => tt.key === reqKey)
               if (prereqType) {
-                const prereqPassed = teamB?.some(
-                  (b: Booking) => b.inspection_type_id === prereqType.id && b.status === 'passed'
+                const prereqPassed = (teamB as any[])?.some(
+                  (b: any) => b.inspection_type_id === prereqType.id && b.status === 'passed'
                 )
                 if (!prereqPassed) prerequisitesMet = false
               }
@@ -140,7 +158,7 @@ export default function ScrutineeringBookPage() {
         .eq('inspection_type_id', selectedInspectionType.id)
         .eq('date', todayDate)
       const slots: Record<string, number> = {};
-      (bookings ?? []).forEach(b => {
+      ((bookings ?? []) as any[]).forEach((b: any) => {
         slots[b.start_time] = (slots[b.start_time] || 0) + 1
       })
       setReservedSlots(slots)
@@ -153,10 +171,10 @@ export default function ScrutineeringBookPage() {
     (async () => {
       const { data } = await supabase
         .from('bookings')
-        .select('id, start_time, resource_index, teams(name), team_id')
+        .select('id, start_time, resource_index, teams(name), team_id, inspection_type_id, date, end_time, status, notes, is_rescrutineering, created_by')
         .eq('inspection_type_id', selectedInspectionType.id)
         .eq('date', todayDate)
-      setAllBookings(data ?? [])
+      setAllBookings((data ?? []) as unknown as Booking[])
     })()
   }, [selectedInspectionType, supabase, todayDate, ok])
 
@@ -190,6 +208,9 @@ export default function ScrutineeringBookPage() {
   async function handleConfirmBooking() {
     setLoading(true); setError(null); setOk(false)
     const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setError('Not authenticated'); setLoading(false); return
+    }
     const useTeamId = userRole === 'admin' ? adminViewTeam : teamId
     if (!selectedInspectionType || !selectedTime) {
       setError('Select inspection type and time.'); setLoading(false); return
@@ -201,7 +222,7 @@ export default function ScrutineeringBookPage() {
       .eq('inspection_type_id', selectedInspectionType.id)
       .eq('date', todayDate)
       .eq('start_time', selectedTime)
-    const reservedLanes = new Set((bookings ?? []).map(b => b.resource_index))
+    const reservedLanes = new Set(((bookings ?? []) as any[]).map((b: any) => b.resource_index))
     let lane = 1;
     while (reservedLanes.has(lane) && lane <= (selectedInspectionType?.concurrent_slots ?? 1)) lane++
     if (lane > (selectedInspectionType?.concurrent_slots ?? 1)) {
@@ -223,7 +244,7 @@ export default function ScrutineeringBookPage() {
       notes,
       is_rescrutineering: false,
       created_by: user.id
-    })
+    } as any)
     setLoading(false)
     if (insertError) { setError(insertError.message); setOk(false) }
     else { setOk(true); setSelectedTime(""); setNotes("") }
@@ -261,13 +282,14 @@ export default function ScrutineeringBookPage() {
         <div className="grid grid-cols-3 gap-2">
           {slots.map(time => {
             // For each possible concurrent slot, show bookings
+            const bookingsForTime = []
             for (let lane = 1; lane <= selectedInspectionType.concurrent_slots; lane++) {
               const booking = allBookings.find(b =>
                 b.start_time === time &&
                 b.resource_index === lane
               )
               if (booking) {
-                return (
+                bookingsForTime.push(
                   <div key={time + "-lane-" + lane} className="bg-blue-100 rounded px-2 py-1 flex items-center gap-2">
                     <span className="font-bold">{booking.teams?.name}</span>
                     <span className="text-xs">({time}, Ln {lane})</span>
@@ -280,6 +302,9 @@ export default function ScrutineeringBookPage() {
                   </div>
                 )
               }
+            }
+            if (bookingsForTime.length > 0) {
+              return bookingsForTime
             }
             return (
               <div key={time + "-empty"} className="px-2 py-1 text-xs text-gray-400 bg-gray-50 rounded border">
@@ -373,7 +398,9 @@ export default function ScrutineeringBookPage() {
               })}
             </div>
             <label className="block font-semibold mt-4 mb-2 flex items-center gap-2">Notes
-              <Info className="h-4 w-4 text-blue-400" title="Optional. Add context or comments for your booking." />
+              <span title="Optional. Add context or comments for your booking.">
+                <Info className="h-4 w-4 text-blue-400" />
+              </span>
             </label>
             <textarea
               value={notes}

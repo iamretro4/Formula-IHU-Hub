@@ -24,10 +24,13 @@ export async function POST(request: NextRequest) {
     // Hash password
     const passwordHash = await bcrypt.hash(validatedData.password, 12)
 
+    // Combine first and last name
+    const fullName = `${validatedData.firstName} ${validatedData.lastName}`.trim()
+
     // Create user
     const user = await prisma.user.create({
       data: {
-        name: validatedData.name,
+        name: fullName,
         email: validatedData.email,
         passwordHash,
         role: UserRole.TEAM_USER,
@@ -35,10 +38,10 @@ export async function POST(request: NextRequest) {
     })
 
     // If user is a team lead, create a team
-    if (validatedData.isTeamLead && validatedData.teamName) {
+    if (validatedData.teamLead && validatedData.teamId) {
       await prisma.team.create({
         data: {
-          name: validatedData.teamName,
+          name: validatedData.teamId, // or use another field if available
           contactEmail: validatedData.email,
           members: {
             connect: { id: user.id }

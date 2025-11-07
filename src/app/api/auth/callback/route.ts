@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
           ehic_number: metadata.ehic_number || '',
           app_role: metadata.app_role || 'viewer',
           profile_completed: false, // Always set to false initially
-        }, { 
+        } as any, { 
           onConflict: 'id',
           ignoreDuplicates: false
         })

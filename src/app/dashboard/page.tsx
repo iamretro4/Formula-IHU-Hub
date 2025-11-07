@@ -13,6 +13,43 @@ import {
 } from "lucide-react"
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
+type Announcement = {
+  id: number
+  message: string
+}
+
+type ScheduleEntry = {
+  time: string
+  event: string
+  icon: React.ReactNode
+}
+
+type Stats = {
+  teams: number
+  vehicles: number
+  events: number
+  activeSessions: number
+}
+
+type UserProfile = {
+  id: string
+  team_id: string | null
+  app_role: string | null
+  team?: {
+    vehicle_class: string
+  }
+}
+
+type UploadedFile = {
+  id: string
+  team_id: string
+  uploaded_by: string
+  document_key: string
+  file_name: string
+  storage_path: string
+  uploaded_at: string
+}
+
 const documents = [
   { key: 'powertrain_selection', label: 'Powertrain Selection', classes: ['EV', 'CV'], allowedTypes: [] },
   { key: 'chassis_type', label: 'Chassis Type (CTS)', classes: ['EV', 'CV'], allowedTypes: [] },
@@ -26,13 +63,13 @@ const documents = [
   { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: ['text/plain'] },
 ]
 
-const fetchAnnouncements = async () => [
+const fetchAnnouncements = async (): Promise<Announcement[]> => [
   { id: 1, message: "Technical Inspection starts at 08:30." },
-  { id: 2, message: "Driver’s meeting at 09:00 near the paddock tent." },
+  { id: 2, message: "Driver's meeting at 09:00 near the paddock tent." },
   { id: 3, message: "Today's weather is sunny, 24°C." }
 ];
 
-const fetchTodaysSchedule = async () => [
+const fetchTodaysSchedule = async (): Promise<ScheduleEntry[]> => [
   { time: "08:30", event: "Technical Inspection", icon: <Flag className="text-green-500" /> },
   { time: "09:00", event: "Driver's Meeting", icon: <Users2 className="text-blue-500" /> },
   { time: "10:30", event: "Dynamic Events Begin", icon: <Trophy className="text-yellow-500" /> }
@@ -44,17 +81,17 @@ function sanitizeFileName(name: string) {
 
 export default function DashboardPage() {
   const supabase = createClientComponentClient();
-  const [announcements, setAnnouncements] = useState([]);
-  const [schedule, setSchedule] = useState([]);
-  const [stats, setStats] = useState({ teams: 37, vehicles: 20, events: 12, activeSessions: 4 });
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
+  const [stats, setStats] = useState<Stats>({ teams: 37, vehicles: 20, events: 12, activeSessions: 4 });
 
   // Upload-related state
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [teamClass, setTeamClass] = useState('EV');
-  const [uploadFiles, setUploadFiles] = useState({});
+  const [uploadFiles, setUploadFiles] = useState<Record<string, File | null>>({});
   const [uploading, setUploading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
 
   useEffect(() => {
     fetchAnnouncements().then(setAnnouncements);
@@ -74,7 +111,7 @@ export default function DashboardPage() {
         .from('user_profiles')
         .select('*, team_id, team:teams(vehicle_class)')
         .eq('id', user.id)
-        .single();
+        .single() as { data: any }
 
       setProfile(data);
       setTeamClass(data?.team?.vehicle_class ?? 'EV');
@@ -83,7 +120,7 @@ export default function DashboardPage() {
     fetchProfileAndUploads();
   }, [user]);
 
-  async function fetchUploadedFiles(teamId) {
+  async function fetchUploadedFiles(teamId: string | null) {
     if (!teamId) {
       setUploadedFiles([]);
       return;
@@ -92,17 +129,17 @@ export default function DashboardPage() {
       .from('team_uploads')
       .select('*, uploaded_by (first_name, last_name)')
       .order('uploaded_at', { ascending: false });
-    setUploadedFiles(data ?? []);
+    setUploadedFiles((data ?? []) as UploadedFile[]);
   }
 
-  function handleFileChange(e, docKey) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, docKey: string) {
     const files = e.target.files;
     if (files && files.length > 0) {
       setUploadFiles(f => ({ ...f, [docKey]: files[0] }));
     }
   }
 
-  async function uploadFile(docKey) {
+  async function uploadFile(docKey: string) {
     if (!uploadFiles[docKey] || !profile?.team_id) {
       alert('Please select a file first');
       return;
@@ -116,7 +153,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const file = uploadFiles[docKey];
+    const file = uploadFiles[docKey]!;
     const safeFileName = sanitizeFileName(file.name);
     const path = `${profile.team_id}/${docKey}/${safeFileName}`;
 
@@ -140,8 +177,8 @@ export default function DashboardPage() {
       document_key: docKey,
       file_name: file.name,
       storage_path: path,
-      uploaded_at: new Date(),
-    });
+      uploaded_at: new Date().toISOString(),
+    } as any);
 
     if (metaError) {
       alert(`Metadata update failed: ${metaError.message}`);
@@ -153,7 +190,7 @@ export default function DashboardPage() {
     setUploading(false);
   }
 
-  async function downloadFile(storagePath) {
+  async function downloadFile(storagePath: string) {
     const { data, error } = await supabase.storage.from('team-uploads').download(storagePath);
     if (error) {
       alert(`Download failed: ${error.message}`);
@@ -169,7 +206,7 @@ export default function DashboardPage() {
     URL.revokeObjectURL(url);
   }
 
-  function uploadedFile(docKey) {
+  function uploadedFile(docKey: string): UploadedFile | null {
     return uploadedFiles.find(f => f.document_key === docKey) || null;
   }
 
@@ -183,7 +220,7 @@ export default function DashboardPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Welcome to Formula IHU Hub</h1>
-          <p className="text-gray-600 mt-2">Stay up to date with live announcements and today’s racing schedule.</p>
+          <p className="text-gray-600 mt-2">Stay up to date with live announcements and today's racing schedule.</p>
         </div>
         <div className="flex gap-4">
           <StatsCard label="Teams" value={stats.teams} icon={<Users2 className="text-primary" />} bg="bg-primary/10" />
@@ -277,7 +314,7 @@ export default function DashboardPage() {
   )
 }
 
-function SectionHeader({ icon, title }) {
+function SectionHeader({ icon, title }: { icon: React.ReactNode, title: string }) {
   return (
     <div className="flex items-center gap-2 font-extrabold text-xl text-gray-900">
       {icon}
@@ -286,7 +323,7 @@ function SectionHeader({ icon, title }) {
   )
 }
 
-function StatsCard({ label, value, icon, bg }) {
+function StatsCard({ label, value, icon, bg }: { label: string, value: number, icon: React.ReactNode, bg: string }) {
   return (
     <div className={`flex flex-col items-center justify-center rounded-lg shadow ${bg} min-w-[100px] min-h-[84px]`}>
       <div className="mb-1">{icon}</div>

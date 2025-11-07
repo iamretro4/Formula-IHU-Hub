@@ -5,14 +5,50 @@ import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Loader2 } from 'lucide-react'
 import { FaPlay, FaFilePdf, FaUndo } from 'react-icons/fa'
 import { jsPDF } from 'jspdf'
-import { Database } from '@/lib/types/database'
 
 const QUEUE_TABS = ['upcoming', 'ongoing', 'completed']
 
-type Booking = Database['public']['Tables']['bookings']['Row'] & {
-  teams?: { name: string; code: string } | null;
-  inspection_types?: { name: string } | null;
-  inspection_results?: { id: string; status: string; completed_at?: string }[] | null;
+type Team = {
+  name: string
+  code: string
+}
+
+type InspectionType = {
+  name: string
+}
+
+type InspectionResult = {
+  id: string
+  status: string
+  completed_at?: string
+  scrutineer_ids?: string[]
+}
+
+type Booking = {
+  id: string
+  team_id: string
+  inspection_type_id: string
+  date: string
+  start_time: string
+  end_time: string
+  resource_index: number
+  status: string
+  notes?: string
+  is_rescrutineering: boolean
+  created_by: string
+  teams?: Team | null
+  inspection_types?: InspectionType | null
+  inspection_results?: InspectionResult[] | null
+}
+
+type InspectionProgress = {
+  item_id: string
+  status?: string
+  user_id?: string
+  user_profiles?: {
+    first_name?: string
+    last_name?: string
+  } | null
 }
 
 export default function InspectionQueuePage() {
@@ -23,7 +59,7 @@ export default function InspectionQueuePage() {
   const [tab, setTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming')
   const [loading, setLoading] = useState(true)
   const [reinspectLoading, setReinspectLoading] = useState<string | null>(null)
-  const supabase = createClientComponentClient<Database>()
+  const supabase = createClientComponentClient()
 
   useEffect(() => { setToday(new Date().toISOString().split('T')[0]) }, [])
 
@@ -38,8 +74,8 @@ export default function InspectionQueuePage() {
         .select('app_role, team_id')
         .eq('id', user.id).single()
       if (!profile || cancelled) return
-      setRole(profile.app_role)
-      setTeamId(profile.team_id)
+      setRole(profile.app_role || '')
+      setTeamId(profile.team_id || null)
     })()
     return () => { cancelled = true }
   }, [supabase, today])
@@ -55,7 +91,7 @@ export default function InspectionQueuePage() {
         .from('bookings')
         .select(`
           *,
-          inspection_results(id, status, completed_at),
+          inspection_results(id, status, completed_at, scrutineer_ids),
           inspection_types(name),
           teams(name, code)
         `)
@@ -63,7 +99,7 @@ export default function InspectionQueuePage() {
         .order('start_time')
       if (role === 'team_leader' || role === 'team_member') query = query.eq('team_id', teamId)
       const { data } = await query
-      if (!cancelled) setBookings(data ?? [])
+      if (!cancelled) setBookings((data ?? []) as unknown as Booking[])
       setLoading(false)
     }
     loadQueue()
@@ -107,28 +143,27 @@ export default function InspectionQueuePage() {
       .eq('id', bookingId)
       .single()
     if (!bookingData) return alert("Booking not found.")
+    const typedBooking = bookingData as unknown as Booking
     const { data: progress } = await supabase
       .from('inspection_progress')
       .select('*, user_profiles(first_name, last_name)')
       .eq('booking_id', bookingId)
     const doc = new jsPDF()
-    doc.text(`Inspection: ${bookingData.inspection_types.name}`, 10, 10)
-    doc.text(`Team: ${bookingData.teams.name} (${bookingData.teams.code ?? '-'})`, 10, 20)
-    doc.text(`Slot: ${bookingData.start_time} - ${bookingData.end_time}`, 10, 30)
-    doc.text(`Status: ${bookingData.inspection_results?.[0]?.status ?? '-'}`, 10, 40)
+    doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? 'N/A'}`, 10, 10)
+    doc.text(`Team: ${typedBooking.teams?.name ?? 'N/A'} (${typedBooking.teams?.code ?? '-'})`, 10, 20)
+    doc.text(`Slot: ${typedBooking.start_time} - ${typedBooking.end_time}`, 10, 30)
+    doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status ?? '-'}`, 10, 40)
     doc.text(`Checklist:`, 10, 50)
-    type ProgressItem = {
-      item_id: string
-      status?: string
-      user_profiles?: { first_name?: string; last_name?: string } | null
-      user_id?: string
-    }
-    (progress as ProgressItem[])?.forEach((p, i: number) => {
+    
+    ((progress ?? []) as unknown as InspectionProgress[]).forEach((p, i: number) => {
+      const inspectorName = p.user_profiles 
+        ? `${p.user_profiles.first_name ?? ''} ${p.user_profiles.last_name ?? ''}`.trim() 
+        : p.user_id ?? 'Unknown'
       doc.text(
-        `${i + 1}. ${p.item_id} Status: ${p.status ?? '-'} By: ${p.user_profiles ? `${p.user_profiles.first_name} ${p.user_profiles.last_name}` : p.user_id}`,
+        `${i + 1}. ${p.item_id} Status: ${p.status ?? '-'} By: ${inspectorName}`,
         10, 60 + i * 7)
     })
-    doc.save(`${bookingData.teams.name}_${bookingData.inspection_types.name}_${bookingData.start_time}.pdf`)
+    doc.save(`${typedBooking.teams?.name ?? 'Team'}_${typedBooking.inspection_types?.name ?? 'Inspection'}_${typedBooking.start_time}.pdf`)
   }
 
   // Reinspect logic
@@ -136,11 +171,11 @@ export default function InspectionQueuePage() {
     setReinspectLoading(bookingId)
     await supabase
       .from('inspection_results')
-      .update({ status: 'failed', completed_at: null })
+      .update({ status: 'failed', completed_at: null } as any)
       .eq('booking_id', bookingId)
     await supabase
       .from('inspection_progress')
-      .update({ status: 'failed', comment: null, locked: false })
+      .update({ status: 'failed', comment: null, locked: false } as any)
       .eq('booking_id', bookingId)
     setReinspectLoading(null)
   }
@@ -148,7 +183,7 @@ export default function InspectionQueuePage() {
   return (
     <div className="max-w-xl mx-auto p-8">
       <h1 className="text-2xl font-black mb-1">Live Inspections Queue</h1>
-      <p className="text-gray-500 mb-5">View and manage today’s inspections.</p>
+      <p className="text-gray-500 mb-5">View and manage today's inspections.</p>
       <div className="flex bg-neutral-100 rounded overflow-hidden max-w-md mx-auto text-sm font-semibold mb-6">
         {QUEUE_TABS.map(t =>
           <button

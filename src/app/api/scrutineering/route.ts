@@ -4,6 +4,10 @@ import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 import { hasMinimumRole } from '@/lib/auth'
 
+type ProfileRole = {
+  app_role: string
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createRouteHandlerClient<Database>({ cookies })
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
       .from('user_profiles')
       .select('app_role')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileRole | null }
 
     // Only scrutineers, judges, and admins can view scrutineering
     if (!profile || !hasMinimumRole(profile.app_role || '', 'scrutineer' as any)) {
@@ -88,7 +92,7 @@ export async function POST(request: NextRequest) {
       .from('user_profiles')
       .select('app_role')
       .eq('id', user.id)
-      .single()
+      .single() as { data: ProfileRole | null }
 
     // Only scrutineers and admins can create scrutineering sessions
     if (!profile || !hasMinimumRole(profile.app_role || '', 'scrutineer' as any)) {
@@ -155,7 +159,7 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         created_by: user.id,
         status: 'upcoming',
-      })
+      } as any)
       .select(`
         *,
         teams(id, name, code, country),

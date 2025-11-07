@@ -9,47 +9,88 @@ import {
   Info,
 } from 'lucide-react'
 
+type User = {
+  id: string
+  email?: string
+}
+
+type Profile = {
+  team_id: string | null
+  app_role: string | null
+}
+
+type Event = {
+  id: string
+  name: string
+  location?: string
+}
+
+type Team = {
+  id: string
+  name: string
+}
+
+type Judge = {
+  id: string
+  first_name: string
+  last_name: string
+}
+
+type Booking = {
+  id: string
+  team_id: string
+  slot_id: string
+  requested_by: string
+  date: string
+  start_time: string
+  end_time: string
+  location: string
+  notes?: string
+  status: string
+  slot?: Event
+}
+
 const EEST_ZONE = 'Europe/Athens'
 const FEEDBACK_SLOTS_TIMES = ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30']
 
 export default function FeedbackBookingPage() {
   const supabase = createClientComponentClient()
-  const [user, setUser] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [teamId, setTeamId] = useState(null)
-  const [userRole, setUserRole] = useState(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [teamId, setTeamId] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
-  const [approvedEvents, setApprovedEvents] = useState([])
-  const [selectedEvent, setSelectedEvent] = useState(null)
+  const [approvedEvents, setApprovedEvents] = useState<Event[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
 
   const [selectedDate, setSelectedDate] = useState(DateTime.now().setZone(EEST_ZONE).toISODate())
   const [selectedTime, setSelectedTime] = useState('')
   const [notes, setNotes] = useState('')
 
-  const [bookings, setBookings] = useState([])
+  const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [successMessage, setSuccessMessage] = useState(null)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  const [adminTeamId, setAdminTeamId] = useState(null)
-  const [teams, setTeams] = useState([])
-  const [judges, setJudges] = useState([])
-  const [modalBooking, setModalBooking] = useState(null)
-  const [modalMode, setModalMode] = useState(null) // 'reschedule' | 'assignJudge'
+  const [adminTeamId, setAdminTeamId] = useState<string | null>(null)
+  const [teams, setTeams] = useState<Team[]>([])
+  const [judges, setJudges] = useState<Judge[]>([])
+  const [modalBooking, setModalBooking] = useState<Booking | null>(null)
+  const [modalMode, setModalMode] = useState<'reschedule' | 'assignJudge' | null>(null)
   const [modalDate, setModalDate] = useState('')
   const [modalTime, setModalTime] = useState('')
-  const [selectedJudge, setSelectedJudge] = useState(null)
+  const [selectedJudge, setSelectedJudge] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      setUser(user as User | null)
       if (!user) return
       const { data: profileData } = await supabase
         .from('user_profiles')
         .select('team_id, app_role')
         .eq('id', user.id)
-        .single()
+        .single() as { data: Profile | null }
       setProfile(profileData)
       setTeamId(profileData?.team_id ?? null)
       setUserRole(profileData?.app_role ?? null)
@@ -73,34 +114,35 @@ export default function FeedbackBookingPage() {
     }
   }, [userRole, adminTeamId])
 
-  async function loadApprovedEvents(team) {
+  async function loadApprovedEvents(team: string) {
     if (!team) return
     const { data, error } = await supabase.rpc('fetch_approved_events_for_team', { team_id_input: team })
     if (error) setError(error.message)
-    else setApprovedEvents(data)
+    else setApprovedEvents((data ?? []) as Event[])
   }
 
-  async function fetchBookings(eventId, date) {
+  async function fetchBookings(eventId: string, date: string) {
     const { data, error } = await supabase.from('feedback_bookings')
       .select('*')
       .eq('slot_id', eventId)
       .eq('date', date)
     if (error) setError(error.message)
-    else setBookings(data ?? [])
+    else setBookings((data ?? []) as Booking[])
   }
 
   async function fetchTeams() {
     const { data } = await supabase.from('teams').select('id, name').order('name')
-    setTeams(data ?? [])
-    if (!adminTeamId && data?.length > 0) setAdminTeamId(data[0].id)
+    const teams = (data ?? []) as Team[]
+    setTeams(teams)
+    if (!adminTeamId && teams.length > 0) setAdminTeamId(teams[0].id)
   }
 
   async function fetchJudges() {
     const { data } = await supabase.from('user_profiles').select('id, first_name, last_name').eq('app_role', 'judge')
-    setJudges(data ?? [])
+    setJudges((data ?? []) as Judge[])
   }
 
-  function isSlotBooked(time) {
+  function isSlotBooked(time: string) {
     if (!bookings) return false
     return bookings.some(bk => bk.start_time === time && bk.status !== 'rejected')
   }
@@ -130,14 +172,14 @@ export default function FeedbackBookingPage() {
     const { error } = await supabase.from('feedback_bookings').insert([{
       team_id: userRole === 'admin' && adminTeamId ? adminTeamId : teamId,
       slot_id: selectedEvent.id,
-      requested_by: user.id,
+      requested_by: user?.id,
       date: selectedDate,
       start_time: selectedTime,
       end_time: dtEnd.toFormat('HH:mm'),
       location: selectedEvent.location,
       notes,
       status: 'pending',
-    }])
+    } as any])
 
     setLoading(false)
 
@@ -151,16 +193,16 @@ export default function FeedbackBookingPage() {
     }
   }
 
-  async function updateBookingStatus(id, status) {
-    const { error } = await supabase.from('feedback_bookings').update({ status }).eq('id', id)
+  async function updateBookingStatus(id: string, status: string) {
+    const { error } = await supabase.from('feedback_bookings').update({ status } as any).eq('id', id)
     if (error) setError(error.message)
     else if (selectedEvent && selectedDate) fetchBookings(selectedEvent.id, selectedDate)
   }
 
-  async function approveBooking(id) {
+  async function approveBooking(id: string) {
     await updateBookingStatus(id, 'approved')
   }
-  async function rejectBooking(id) {
+  async function rejectBooking(id: string) {
     await updateBookingStatus(id, 'rejected')
   }
 
@@ -178,12 +220,12 @@ export default function FeedbackBookingPage() {
       start_time: modalTime,
       end_time: dtEnd.toFormat('HH:mm'),
       status: 'rescheduled',
-    }).eq('id', modalBooking.id)
+    } as any).eq('id', modalBooking.id)
 
     if (error) setError(error.message)
     else {
       setSuccessMessage('Rescheduled successfully')
-      fetchBookings(selectedEvent.id, selectedDate)
+      if (selectedEvent && selectedDate) fetchBookings(selectedEvent.id, selectedDate)
       setModalBooking(null)
       setModalDate('')
       setModalTime('')
@@ -199,7 +241,7 @@ export default function FeedbackBookingPage() {
     const { error } = await supabase.from('feedback_judge_assignments').insert({
       booking_id: modalBooking.id,
       judge_id: selectedJudge,
-    })
+    } as any)
     if (error) setError(error.message)
     else {
       setSuccessMessage('Judge assigned')
@@ -253,13 +295,13 @@ export default function FeedbackBookingPage() {
         ))}
 
         {modalMode && modalBooking && (
-          <div style={modalOverlayStyle}>
+          <div style={modalOverlayStyle as any}>
             <div style={modalContentStyle}>
               {modalMode === 'reschedule' && (
                 <>
                   <h4 style={modalHeaderStyle}>Reschedule Booking</h4>
                   <label style={modalLabelStyle}>New Date</label>
-                  <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)} style={modalInputStyle} min={DateTime.now().toISODate()} />
+                  <input type="date" value={modalDate} onChange={e => setModalDate(e.target.value)} style={modalInputStyle} min={DateTime.now().toISODate() || undefined} />
                   <label style={modalLabelStyle}>New Time</label>
                   <select value={modalTime} onChange={e => setModalTime(e.target.value)} style={modalInputStyle}>
                     <option value="">Select time</option>
@@ -296,15 +338,12 @@ export default function FeedbackBookingPage() {
     )
   }
 
-  function isSlotBooked(time) {
-    if (!bookings) return false
-    return bookings.some(bk => bk.start_time === time && bk.status !== 'rejected')
-  }
-
   return (
     <div style={{ maxWidth: '600px', margin: '1rem auto', padding: '1rem' }}>
       <h1 style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Feedback Appointments</h1>
       <p>Book feedback sessions with judges for approved scoring events.</p>
+
+      <AdminControls />
 
       <div style={{ marginTop: '20px' }}>
         <label htmlFor="event-select" style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>
@@ -332,8 +371,8 @@ export default function FeedbackBookingPage() {
           id="date-picker"
           type="date"
           style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ccc', marginBottom: '12px' }}
-          min={DateTime.now().setZone(EEST_ZONE).toISODate()}
-          value={selectedDate}
+          min={DateTime.now().setZone(EEST_ZONE).toISODate() || undefined}
+          value={selectedDate || ''}
           onChange={e => setSelectedDate(e.target.value)}
         />
 
@@ -407,7 +446,7 @@ const buttonStyle = {
 }
 
 const modalOverlayStyle = {
-  position: 'fixed',
+  position: 'fixed' as const,
   inset: 0,
   backgroundColor: 'rgba(0,0,0,0.5)',
   display: 'flex',
@@ -461,4 +500,3 @@ const modalActionButtonStyle = {
   ...buttonStyle,
   backgroundColor: '#3b82f6',
 }
-
