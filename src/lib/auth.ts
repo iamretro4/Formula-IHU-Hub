@@ -2,7 +2,6 @@
 // Supports both Supabase roles and legacy Prisma roles for compatibility
 
 import { authOptions } from './validations/auth'
-import { UserRole } from '@prisma/client'
 
 export { authOptions }
 
@@ -24,7 +23,8 @@ const supabaseRoleHierarchy: Record<string, number> = {
 }
 
 // Legacy Prisma role hierarchy (for backward compatibility)
-const prismaRoleHierarchy: Record<UserRole, number> = {
+// Using string keys instead of Prisma enum to avoid build-time dependencies
+const prismaRoleHierarchy: Record<string, number> = {
   VIEWER: 0,
   TEAM_USER: 1,
   TEAM_LEADER: 2,
@@ -39,18 +39,18 @@ const prismaRoleHierarchy: Record<UserRole, number> = {
  * Supports both Supabase string roles and Prisma enum roles
  */
 export function hasMinimumRole(
-  userRole: string | UserRole | null | undefined,
-  requiredRole: string | UserRole
+  userRole: string | null | undefined,
+  requiredRole: string
 ): boolean {
   if (!userRole) return false
 
   // Normalize roles to lowercase for comparison
-  const userRoleStr = typeof userRole === 'string' ? userRole.toLowerCase() : userRole
-  const requiredRoleStr = typeof requiredRole === 'string' ? requiredRole.toLowerCase() : requiredRole
+  const userRoleStr = typeof userRole === 'string' ? userRole.toLowerCase() : String(userRole).toLowerCase()
+  const requiredRoleStr = typeof requiredRole === 'string' ? requiredRole.toLowerCase() : String(requiredRole).toLowerCase()
 
-  // Check Supabase roles first
-  const userLevel = supabaseRoleHierarchy[userRoleStr] ?? prismaRoleHierarchy[userRole as UserRole] ?? 0
-  const requiredLevel = supabaseRoleHierarchy[requiredRoleStr] ?? prismaRoleHierarchy[requiredRole as UserRole] ?? 0
+  // Check Supabase roles first, then Prisma roles
+  const userLevel = supabaseRoleHierarchy[userRoleStr] ?? prismaRoleHierarchy[userRoleStr.toUpperCase()] ?? 0
+  const requiredLevel = supabaseRoleHierarchy[requiredRoleStr] ?? prismaRoleHierarchy[requiredRoleStr.toUpperCase()] ?? 0
 
   return userLevel >= requiredLevel
 }
