@@ -112,8 +112,8 @@ export default function TrackLivePage() {
         .select('id, team_id, app_role, first_name, last_name')
         .eq('id', user.id)
         .single()
-      if (profileErr) throw profileErr
-      setProfile(profileData)
+        if (profileErr) throw profileErr
+        setProfile(profileData as any)
 
       const { data: teamsData, error: teamsErr } = await supabase
         .from('teams')
@@ -131,7 +131,7 @@ export default function TrackLivePage() {
           `
         )
       if (runError) throw runError
-      setAllRuns(runData || [])
+      setAllRuns((runData || []) as any)
 
       // Optionally add stats fetch here, omitted for brevity
 
@@ -211,7 +211,7 @@ export default function TrackLivePage() {
         raw_time: inputRun.status === 'completed' ? +inputRun.time : null,
         status: inputRun.status,
         recorded_by: profile?.id,
-      })
+      } as any)
       if (insertError) throw insertError
 
       await fetchAll()

@@ -66,7 +66,7 @@ export default function ScrutineeringBookPage() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   ), [])
-  const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate()
+  const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate() ?? new Date().toISOString().split('T')[0]
   const adminViewTeamRef = useRef<string | null>(null)
   const effectRunIdRef = useRef(0)
 

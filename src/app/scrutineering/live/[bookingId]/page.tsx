@@ -148,7 +148,7 @@ export default function ChecklistBookingPage() {
         for (const rec of (progress ?? []) as any[]) s[rec.item_id] = rec as InspectionProgress
         setStatus(s)
         // Comments
-        const { data: comms, error: commentsErr } = await supabase
+        const { data: comms, error: commentsErr } = await (supabase as any)
           .from('inspection_comments')
           .select(`*, user_profiles!inspection_comments_user_id_fkey(first_name, last_name)`)
           .eq('booking_id', bookingId)
@@ -227,7 +227,7 @@ export default function ChecklistBookingPage() {
         setSaving(false)
         return
       }
-      await supabase.from('inspection_comments').insert({
+      await (supabase as any).from('inspection_comments').insert({
         booking_id: bookingId,
         item_id: item_id,
         user_id: user?.id,

@@ -133,7 +133,7 @@ export default function MarshalAndLiveTrackPage() {
   async function loadEntries() {
     const since = new Date()
     since.setDate(since.getDate() - 1)
-    const { data } = await supabase
+    const { data } = await (supabase as any)
       .from('track_activity_log')
       .select('id,team_id,event,sector,action,timestamp,teams(name,code)')
       .gte('timestamp', since.toISOString())
@@ -219,7 +219,7 @@ export default function MarshalAndLiveTrackPage() {
     setLogging(true)
     setError(null)
     try {
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from('track_incidents')
         .select('id')
         .eq('team_id', pendingSafetyTeam)
@@ -249,7 +249,7 @@ export default function MarshalAndLiveTrackPage() {
     setError(null)
     try {
       const now = new Date().toISOString()
-      await (supabase.from('track_activity_log') as any).insert({
+      await (supabase as any).from('track_activity_log').insert({
         team_id: teamId,
         event,
         sector,
