@@ -154,48 +154,49 @@ export default function ScrutineeringCalendarDay() {
           {grid.map((row, idx) => {
             const timeSlot = row[0] as string
             return (
-            <React.Fragment key={`calendar-row-${timeSlot}`}>
-              <div key={`calendar-time-${timeSlot}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{timeSlot}</div>
-              {row.slice(1).map((booking: Booking | undefined, colIdx) => {
-                const type = inspectionTypes[colIdx]
-                const isBooked = !!booking
-                const isYours = isBooked && booking?.team_id === teamId
-                return (
-                  <div
-                    key={`calendar-${timeSlot}-${type?.id}-${booking?.id ?? colIdx}`}
-                    className={`mb-1 rounded-lg flex flex-col items-center justify-center border shadow-sm px-1.5 py-2 bg-white min-h-[54px] ${
-                      isBooked
-                        ? (isYours
-                          ? "bg-emerald-100 border-emerald-300"
-                          : "bg-gray-100 border-gray-200 ring-0")
-                        : "hover:bg-primary/10 cursor-pointer"
-                    }`}
-                  >
-                    {isBooked ? (
-                      <>
-                        <span className={`inline-block text-xs font-bold whitespace-pre-wrap ${isYours ? "text-emerald-800" : "text-gray-600"}`}>
-                          {isYours ? "Your Team" : "Reserved"}
-                        </span>
-                        <span className="text-xxs text-gray-400 font-medium">
-                          {getTeamName(booking)}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-gray-400">{booking?.start_time}</span>
-                      </>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="text-xs w-full max-w-[100px] shadow"
-                        variant="outline"
-                        onClick={() => router.push('/scrutineering/book')}
-                      >
-                        + Book
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </React.Fragment>
-          ))}
+              <React.Fragment key={`calendar-row-${timeSlot}`}>
+                <div key={`calendar-time-${timeSlot}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{timeSlot}</div>
+                {row.slice(1).map((booking: Booking | undefined, colIdx) => {
+                  const type = inspectionTypes[colIdx]
+                  const isBooked = !!booking
+                  const isYours = isBooked && booking?.team_id === teamId
+                  return (
+                    <div
+                      key={`calendar-${timeSlot}-${type?.id}-${booking?.id ?? colIdx}`}
+                      className={`mb-1 rounded-lg flex flex-col items-center justify-center border shadow-sm px-1.5 py-2 bg-white min-h-[54px] ${
+                        isBooked
+                          ? (isYours
+                            ? "bg-emerald-100 border-emerald-300"
+                            : "bg-gray-100 border-gray-200 ring-0")
+                          : "hover:bg-primary/10 cursor-pointer"
+                      }`}
+                    >
+                      {isBooked ? (
+                        <>
+                          <span className={`inline-block text-xs font-bold whitespace-pre-wrap ${isYours ? "text-emerald-800" : "text-gray-600"}`}>
+                            {isYours ? "Your Team" : "Reserved"}
+                          </span>
+                          <span className="text-xxs text-gray-400 font-medium">
+                            {getTeamName(booking)}
+                          </span>
+                          <span className="mt-0.5 block text-xs text-gray-400">{booking?.start_time}</span>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          className="text-xs w-full max-w-[100px] shadow"
+                          variant="outline"
+                          onClick={() => router.push('/scrutineering/book')}
+                        >
+                          + Book
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </React.Fragment>
+            )
+          })}
         </div>
       </div>
       {/* Agenda/Booked panel */}
