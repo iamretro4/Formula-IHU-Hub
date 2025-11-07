@@ -2,19 +2,25 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/types/database'
+import getSupabaseClient from '@/lib/supabase/client'
 
 export default function HomePage() {
   const router = useRouter()
-  const supabase = createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   useEffect(() => {
     const checkAuthAndRedirect = async () => {
       try {
+        // Check if environment variables are available
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        
+        if (!url || !key) {
+          // If env vars are missing, redirect to signin
+          router.push('/auth/signin')
+          return
+        }
+        
+        const supabase = getSupabaseClient()
         // Use getUser() which validates the token with Supabase Auth server
         // This is more secure than getSession() which reads from cookies
         const { data: { user }, error } = await supabase.auth.getUser()
@@ -33,7 +39,7 @@ export default function HomePage() {
       }
     }
     checkAuthAndRedirect()
-  }, [router, supabase])
+  }, [router])
 
   return (
     <div className="flex h-screen items-center justify-center bg-gray-50">

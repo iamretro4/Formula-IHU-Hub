@@ -7,6 +7,9 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 const inter = Inter({ subsets: ['latin'] })
 
+// Force dynamic rendering to prevent build-time Supabase client creation
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Scrutineer Hub - Formula Racing Scrutineering Platform',
   description: 'Professional scrutineering platform for formula racing and EV competitions',

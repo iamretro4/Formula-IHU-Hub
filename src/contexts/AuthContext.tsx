@@ -30,10 +30,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') {
       return null
     }
-    return createBrowserClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    
+    if (!url || !key) {
+      console.warn('Missing Supabase environment variables')
+      return null
+    }
+    
+    return createBrowserClient<Database>(url, key)
   }, [])
 
   // Set client flag on mount

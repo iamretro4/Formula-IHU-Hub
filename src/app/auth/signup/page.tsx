@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
 import { signUpSchema, SignUpInput } from '@/lib/validators'
-import supabase from '@/lib/supabase/client'
+import getSupabaseClient from '@/lib/supabase/client'
 
 export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -42,6 +42,7 @@ export default function SignUpPage() {
 
   useEffect(() => {
     const fetchTeams = async () => {
+      const supabase = getSupabaseClient()
       const { data, error } = await supabase
         .from('teams')
         .select('id, name, code')
@@ -88,6 +89,7 @@ export default function SignUpPage() {
         profile_completed: false,
       }
 
+      const supabase = getSupabaseClient()
       const { error: signupError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
