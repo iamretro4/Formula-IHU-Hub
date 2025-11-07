@@ -102,11 +102,11 @@ export default function MarshalAndLiveTrackPage() {
       .order('occurred_at', { ascending: false })
     setIncidents(
       Array.isArray(data)
-        ? data.map((inc) => ({
+        ? data.map((inc: any) => ({
             ...inc,
             team_code: inc.team?.code,
             team_name: inc.team?.name,
-          }))
+          } as any))
         : []
     )
   }
@@ -120,11 +120,11 @@ export default function MarshalAndLiveTrackPage() {
       .gte('timestamp', since.toISOString())
       .order('timestamp', { ascending: true })
     const mapped = Array.isArray(data)
-      ? data.map((entry) => ({
+      ? data.map((entry: any) => ({
           ...entry,
           team_code: entry.teams?.code,
           team_name: entry.teams?.name,
-        }))
+        } as any))
       : []
     setTrackEntries(mapped)
     const map = new Map<string, TrackEntry>()
@@ -142,7 +142,7 @@ export default function MarshalAndLiveTrackPage() {
     setError(null)
     try {
       const now = new Date().toISOString()
-      await supabase.from('track_incidents').insert({
+      await (supabase.from('track_incidents') as any).insert({
         team_id: teamId,
         marshal_id: user.id,
         incident_type: type,
@@ -168,7 +168,7 @@ export default function MarshalAndLiveTrackPage() {
     setError(null)
     try {
       const now = new Date().toISOString()
-      await supabase.from('track_incidents').insert({
+      await (supabase.from('track_incidents') as any).insert({
         team_id: pendingSafetyTeam,
         marshal_id: user.id,
         incident_type: 'Safety',
@@ -209,7 +209,7 @@ export default function MarshalAndLiveTrackPage() {
         .order('occurred_at', { ascending: false })
         .limit(1)
       if (data?.[0]) {
-        await supabase.from('track_incidents').delete().eq('id', data[0].id)
+        await (supabase.from('track_incidents') as any).delete().eq('id', (data[0] as any).id)
       }
       setShowSafetyButtons(false)
       setPendingSafetyTeam(null)
@@ -230,7 +230,7 @@ export default function MarshalAndLiveTrackPage() {
     setError(null)
     try {
       const now = new Date().toISOString()
-      await supabase.from('track_activity_log').insert({
+      await (supabase.from('track_activity_log') as any).insert({
         team_id: teamId,
         event,
         sector,

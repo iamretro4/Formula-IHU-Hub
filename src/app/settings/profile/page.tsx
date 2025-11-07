@@ -75,8 +75,8 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      const { error: updateError } = await supabase
-        .from('user_profiles')
+      const { error: updateError } = await (supabase
+        .from('user_profiles') as any)
         .update({
           first_name: formData.first_name,
           last_name: formData.last_name,

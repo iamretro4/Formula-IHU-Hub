@@ -148,14 +148,15 @@ export default function InspectionQueuePage() {
       .from('inspection_progress')
       .select('*, user_profiles(first_name, last_name)')
       .eq('booking_id', bookingId)
-    const doc = new jsPDF()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = new (jsPDF as any)()
     doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? 'N/A'}`, 10, 10)
     doc.text(`Team: ${typedBooking.teams?.name ?? 'N/A'} (${typedBooking.teams?.code ?? '-'})`, 10, 20)
     doc.text(`Slot: ${typedBooking.start_time} - ${typedBooking.end_time}`, 10, 30)
     doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status ?? '-'}`, 10, 40)
     doc.text(`Checklist:`, 10, 50)
     
-    ((progress ?? []) as unknown as InspectionProgress[]).forEach((p, i: number) => {
+    ((progress ?? []) as unknown as InspectionProgress[]).forEach((p: InspectionProgress, i: number) => {
       const inspectorName = p.user_profiles 
         ? `${p.user_profiles.first_name ?? ''} ${p.user_profiles.last_name ?? ''}`.trim() 
         : p.user_id ?? 'Unknown'

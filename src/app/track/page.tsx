@@ -363,7 +363,7 @@ export default function TrackLivePage() {
                         />
                         <Select
                           value={inputRun.status}
-                          onValueChange={v => setInputRun(prev => ({ ...prev, status: v }))}
+                          onValueChange={v => setInputRun(prev => ({ ...prev, status: v as RunStatus }))}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -420,7 +420,7 @@ export default function TrackLivePage() {
                                       />
                                       <Select
                                         value={editRunData.status}
-                                        onValueChange={v => setEditRunData(prev => ({ ...prev, status: v }))}
+                                        onValueChange={v => setEditRunData(prev => ({ ...prev, status: v as RunStatus }))}
                                       >
                                         <SelectTrigger className="w-28">
                                           <SelectValue />

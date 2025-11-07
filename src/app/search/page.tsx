@@ -12,7 +12,12 @@ import { Database } from '@/lib/types/database'
 import Link from 'next/link'
 
 type Team = Database['public']['Tables']['teams']['Row']
-type Vehicle = Database['public']['Tables']['vehicles']['Row'] & {
+type Vehicle = {
+  id: string
+  name?: string
+  team_id?: string
+  chassis_number?: string
+  status?: string
   teams?: { name: string; code: string } | null
 }
 type Booking = Database['public']['Tables']['bookings']['Row'] & {
@@ -148,7 +153,7 @@ export default function SearchPage() {
                               <p className="font-medium">{team.name}</p>
                               <p className="text-sm text-gray-600">{team.code}</p>
                             </div>
-                            <Badge>{team.country}</Badge>
+                            {team.university && <Badge>{team.university}</Badge>}
                           </div>
                         </Link>
                       ))}
@@ -176,8 +181,8 @@ export default function SearchPage() {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium">{vehicle.name}</p>
-                              <p className="text-sm text-gray-600">
-                                {vehicle.teams?.name} - {vehicle.chassis_number}
+                              <p className="text-sm text-gray-600">     
+                                {vehicle.teams?.name} {vehicle.chassis_number && `- ${vehicle.chassis_number}`}
                               </p>
                             </div>
                             <Badge variant="outline">{vehicle.status}</Badge>

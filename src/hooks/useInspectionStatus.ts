@@ -53,7 +53,7 @@ export function useInspectionStatus({
 
         if (fetchError) throw fetchError
         if (!cancelled) {
-          setStatus(data?.status || null)
+          setStatus((data as any)?.status || null)
         }
       } catch (err) {
         if (!cancelled) {
@@ -83,9 +83,9 @@ export function useInspectionStatus({
 
     const attemptUpdate = async (attempt: number): Promise<boolean> => {
       try {
-        const { error: updateError } = await supabase
-          .from('bookings')
-          .update({ 
+        const { error: updateError } = await (supabase
+          .from('bookings') as any)
+          .update({
             status: newStatus,
             ...(newStatus === 'ongoing' && { started_at: new Date().toISOString() }),
             ...(newStatus === 'completed' && { completed_at: new Date().toISOString() })
@@ -104,8 +104,9 @@ export function useInspectionStatus({
           .single()
 
         if (verifyError) throw verifyError
-        
-        if (verification?.status === newStatus) {
+
+        const verified = verification as any
+        if (verified?.status === newStatus) {
           retryCountRef.current = 0
           return true
         } else {

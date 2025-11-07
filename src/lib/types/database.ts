@@ -89,6 +89,9 @@ export type UserProfile = SupabaseDatabase['public']['Tables']['user_profiles'][
 // Team should match the 'teams' table structure from Supabase
 export type Team = SupabaseDatabase['public']['Tables']['teams']['Row'];
 
+// Booking should match the 'bookings' table structure from Supabase
+export type Booking = SupabaseDatabase['public']['Tables']['bookings']['Row'];
+
 // JudgedEventBookingWithTeam for nested relations
 export type JudgedEventBookingWithTeam = SupabaseDatabase['public']['Tables']['judged_event_bookings']['Row'] & {
   teams?: Team | null; // Assuming a single team relation

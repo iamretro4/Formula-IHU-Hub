@@ -125,7 +125,7 @@ export function Topbar() {
               <Menu.Button className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
                   <span className="text-sm font-medium text-gray-700">
-                    {profile?.first_name?.charAt(0) || user.email?.charAt(0) || 'U'}
+                    {profile?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <ChevronDown className="w-4 h-4 ml-2 text-gray-400" />
@@ -135,7 +135,7 @@ export function Topbar() {
                   <div className="py-1">
                     <div className="px-4 py-2 text-sm text-gray-500 border-b border-gray-200">
                       <p className="font-medium text-gray-900">{profile?.first_name || ''} {profile?.last_name || ''}</p>
-                      <p className="text-xs">{user.email}</p>
+                      <p className="text-xs">{user?.email || ''}</p>
                       <p className="text-xs capitalize mt-1">{userRole.replace('_',' ')}</p>
                     </div>
                     <Menu.Item>{({ active }) => (<button onClick={() => router.push('/settings/profile')} className={`${active?'bg-gray-50':''} block w-full text-left px-4 py-2 text-sm text-gray-700`}>Profile Settings</button>)}</Menu.Item>

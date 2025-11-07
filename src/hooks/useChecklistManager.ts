@@ -81,10 +81,10 @@ export function useChecklistManager({
         if (progressError) throw progressError
 
         // Merge templates with progress data
-        const progressMap = new Map(progress?.map(p => [p.item_id, p]) || [])
+        const progressMap = new Map((progress as any)?.map((p: any) => [p.item_id, p]) || [])
         
-        const checklistItems: ChecklistItem[] = (templates || []).map(template => {
-          const progressData = progressMap.get(template.id)
+        const checklistItems: ChecklistItem[] = ((templates || []) as any[]).map((template: any) => {
+          const progressData = progressMap.get(template.id) as any
           return {
             ...template,
             progress: progressData,
@@ -166,11 +166,11 @@ export function useChecklistManager({
           comment: comment || ''
         }
 
-        const { error: upsertError } = await supabase
-          .from('inspection_progress')
-          .upsert([payload], { 
+        const { error: upsertError } = await (supabase
+          .from('inspection_progress') as any)
+          .upsert([payload], {
             onConflict: 'booking_id,item_id',
-            ignoreDuplicates: false 
+            ignoreDuplicates: false
           })
 
         if (upsertError) throw upsertError
@@ -186,8 +186,9 @@ export function useChecklistManager({
         if (verifyError) throw verifyError
 
         // Check if the verification matches our update
-        const isVerified = verification?.status === (checked ? 'pass' : null) &&
-                          verification?.checked_at === (checked ? now : null)
+        const verified = verification as any
+        const isVerified = verified?.status === (checked ? 'pass' : null) &&
+                          verified?.checked_at === (checked ? now : null)
 
         if (isVerified) {
           pendingUpdatesRef.current.delete(itemId)

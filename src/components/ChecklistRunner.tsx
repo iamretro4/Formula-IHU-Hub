@@ -196,7 +196,7 @@ export default function ChecklistRunner({ bookingId, inspectionTypeId }: Checkli
                 <Checkbox
                   id={item.id}
                   checked={item.isChecked}
-                  onCheckedChange={(checked) => 
+                  onCheckedChange={(checked: boolean | string) =>
                     handleItemCheck(item.id, checked as boolean)
                   }
                   disabled={isUpdating}

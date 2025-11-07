@@ -153,10 +153,11 @@ export default function ScrutineeringCalendarDay() {
           {/* Grid time + types row-by-row */}
           {grid.map((row, idx) => {
             const timeSlot = row[0] as string
+            const bookings = row.slice(1) as (Booking | undefined)[]
             return (
               <React.Fragment key={`calendar-row-${timeSlot}`}>
                 <div key={`calendar-time-${timeSlot}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{timeSlot}</div>
-                {row.slice(1).map((booking: Booking | undefined, colIdx) => {
+                {bookings.map((booking: Booking | undefined, colIdx) => {
                   const type = inspectionTypes[colIdx]
                   const isBooked = !!booking
                   const isYours = isBooked && booking?.team_id === teamId

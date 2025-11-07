@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { FaRegCommentDots, FaFilePdf, FaUndo } from 'react-icons/fa'
 import { Loader2 } from 'lucide-react'
-import { jsPDF } from 'jspdf'
+import jsPDF from 'jspdf'
 
 type Team = {
   name: string
