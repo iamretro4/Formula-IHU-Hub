@@ -2,11 +2,44 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Handle CORS for API routes
+  const origin = request.headers.get('origin')
+  const allowedOrigins = [
+    'https://fihu.gr',
+    'https://hub.fihu.gr',
+    'https://flow.fihu.gr',
+    'http://localhost:3000',
+  ]
+  
+  const isAllowedOrigin = origin && allowedOrigins.includes(origin)
+  const corsOrigin = isAllowedOrigin ? origin : allowedOrigins[0]
+
+  // Handle preflight OPTIONS requests
+  if (request.method === 'OPTIONS') {
+    return new NextResponse(null, {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': corsOrigin,
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Credentials': 'true',
+      },
+    })
+  }
+
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   })
+
+  // Add CORS headers to response for API routes
+  if (request.nextUrl.pathname.startsWith('/api')) {
+    response.headers.set('Access-Control-Allow-Origin', corsOrigin)
+    response.headers.set('Access-Control-Allow-Credentials', 'true')
+    response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+    response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

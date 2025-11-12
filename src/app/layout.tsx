@@ -5,7 +5,11 @@ import { Providers } from './providers'
 import { LayoutWrapper } from './layout-wrapper'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  preload: false,
+})
 
 // Force dynamic rendering to prevent build-time Supabase client creation
 export const dynamic = 'force-dynamic'

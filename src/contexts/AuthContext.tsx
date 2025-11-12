@@ -1,9 +1,9 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import type { User } from '@supabase/supabase-js'
 import { Database } from '@/lib/types/database'
+import getSupabaseClient from '@/lib/supabase/client'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
@@ -25,20 +25,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false)
   const [isClient, setIsClient] = useState(false)
 
-  // Only create client on client side using @supabase/ssr for proper cookie handling
+  // Use shared Supabase client instance to avoid multiple GoTrueClient instances
   const supabase = useMemo(() => {
     if (typeof window === 'undefined') {
       return null
     }
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     
-    if (!url || !key) {
-      console.warn('Missing Supabase environment variables')
+    try {
+      return getSupabaseClient()
+    } catch (err) {
+      console.warn('Failed to get Supabase client:', err)
       return null
     }
-    
-    return createBrowserClient<Database>(url, key)
   }, [])
 
   // Set client flag on mount
@@ -60,10 +58,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Use getSession() first to check cookies, then validate with getUser()
       // This is faster for initial load
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      // Wrap in try-catch to handle cookie parsing errors gracefully
+      let session, sessionError
+      try {
+        const result = await supabase.auth.getSession()
+        session = result.data.session
+        sessionError = result.error
+      } catch (err) {
+        // Handle cookie parsing errors
+        console.warn('[AuthContext] Session retrieval error (possibly malformed cookies):', err)
+        sessionError = err instanceof Error ? err : new Error('Failed to get session')
+        session = null
+      }
       
       if (sessionError) {
         console.error('[AuthContext] Session error:', sessionError)
+        // Don't throw if it's a cookie parsing error - just clear state
+        if (sessionError.message?.includes('parse') || sessionError.message?.includes('cookie')) {
+          setUser(null)
+          setProfile(null)
+          setLoading(false)
+          setIsInitialized(true)
+          return
+        }
         throw sessionError
       }
       

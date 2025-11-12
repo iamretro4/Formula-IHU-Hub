@@ -29,11 +29,6 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
         loading,
         error,
       })
-      
-      // Also log warning if no user on protected route
-      if (!loading && !user && !isAuthRoute && pathname !== '/auth/signin') {
-        console.warn('[LayoutWrapper] No user but on protected route:', pathname)
-      }
     }
   }, [user, loading, error, pathname, isAuthRoute])
 
