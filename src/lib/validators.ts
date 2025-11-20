@@ -8,8 +8,8 @@ export const signUpSchema = z.object({
   fatherName: z.string().min(1, 'Father’s name is required'),
   phone: z.string().min(1, 'Phone is required'),
   emergencyContact: z.string().min(1, 'Emergency contact is required'),
-  ehicNumber: z.string().optional(), // ONLY THIS FIELD IS NULLABLE
-  teamId: z.string().min(1, 'Team is required'), // required UUID
+  ehicNumber: z.string().optional(), // Optional
+  teamId: z.string().optional(), // Optional - can be assigned later by admin
   campsiteStaying: z.boolean().optional(), // match DB column default false
   teamLead: z.boolean().optional(),        // match DB column default false
   password: z.string().min(8, 'Password must be at least 8 characters'),

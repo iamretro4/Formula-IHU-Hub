@@ -1,5 +1,6 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { Database } from '@/lib/types/database'
+import { logger } from './logger'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
@@ -28,7 +29,7 @@ export async function getCurrentUser(supabase: ReturnType<typeof createClientCom
     
     return { user, profile: profile as UserProfile }
   } catch (error) {
-    console.error('Error getting current user:', error)
+    logger.error('Error getting current user', error, { context: 'get_current_user' })
     return null
   }
 }

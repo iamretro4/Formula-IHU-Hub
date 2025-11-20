@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
 import { Modal } from './Modal'
 import { vehicleSchema, VehicleInput } from '@/lib/validators'
+import { logger } from '@/lib/utils/logger'
 
 interface CreateVehicleModalProps {
   isOpen: boolean
@@ -50,7 +51,7 @@ export function CreateVehicleModal({ isOpen, onClose }: CreateVehicleModalProps)
         setTeams(data)
       }
     } catch (error) {
-      console.error('Failed to load teams:', error)
+      logger.error('Failed to load teams', error, { context: 'create_vehicle_modal' })
     }
   }
 

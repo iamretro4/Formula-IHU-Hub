@@ -1,11 +1,27 @@
 'use client'
 import React from "react"
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/types/database'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import getSupabaseClient, { ensureSupabaseConnection } from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
+import { 
+  Calendar, 
+  Clock, 
+  Zap, 
+  Wrench, 
+  Battery, 
+  Plus, 
+  Loader2, 
+  AlertCircle, 
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle
+} from 'lucide-react'
+import toast from 'react-hot-toast'
 
 type InspectionType = {
   id: string
@@ -75,45 +91,108 @@ function getInspectionTypeName(b: Booking) {
   return ""
 }
 
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  Electrical: <Zap className="w-4 h-4" />,
+  Mechanical: <Wrench className="w-4 h-4" />,
+  Accumulator: <Battery className="w-4 h-4" />,
+}
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
+  confirmed: { bg: 'bg-green-100', text: 'text-green-700', icon: <CheckCircle2 className="w-3 h-3" /> },
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: <AlertTriangle className="w-3 h-3" /> },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', icon: <XCircle className="w-3 h-3" /> },
+  completed: { bg: 'bg-blue-100', text: 'text-blue-700', icon: <CheckCircle2 className="w-3 h-3" /> },
+}
+
 export default function ScrutineeringCalendarDay() {
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([])
   const [allBookings, setAllBookings] = useState<Booking[]>([])
   const [userRole, setUserRole] = useState<string>('')
   const [teamId, setTeamId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const today = new Date().toISOString().split('T')[0]
-  const supabase = useMemo(() => createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ), [])
+  const supabase = useMemo(() => getSupabaseClient(), [])
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
+    if (authLoading || !user) return
+    
+    setLoading(true)
+    setError(null)
     let active = true
-    ;(async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !active) return
-      const { data: profile } = await supabase
+
+    try {
+      // Ensure connection is valid before making queries
+      const connected = await ensureSupabaseConnection()
+      if (!connected && active) {
+        console.warn('Supabase connection not available, retrying...')
+        await new Promise(resolve => setTimeout(resolve, 500))
+        const retryConnected = await ensureSupabaseConnection()
+        if (!retryConnected) {
+          throw new Error('Failed to establish database connection')
+        }
+      }
+
+      // Verify user is still valid
+      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser()
+      if (userError) throw userError
+      if (!currentUser || !active) return
+
+      const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select('app_role, team_id')
-        .eq('id', user.id)
+        .eq('id', currentUser.id)
         .single()
-      setUserRole(profile?.app_role || '')
-      setTeamId(profile?.team_id || null)
-      const { data: types } = await supabase
+      
+      if (profileError) throw profileError
+
+      if (active) {
+        setUserRole(profile?.app_role || '')
+        setTeamId(profile?.team_id || null)
+      }
+
+      const { data: types, error: typesError } = await supabase
         .from('inspection_types')
         .select('*')
         .order('sort_order')
-      const typedTypes = (types ?? []) as InspectionType[]
-      setInspectionTypes(typedTypes.filter(t => allowedTypes.includes(t.name)))
+      
+      if (typesError) throw typesError
 
-      const { data: bookings } = await supabase
+      const typedTypes = (types ?? []) as InspectionType[]
+      if (active) {
+        setInspectionTypes(typedTypes.filter(t => allowedTypes.includes(t.name)))
+      }
+
+      const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
         .select('id, inspection_type_id, team_id, start_time, end_time, resource_index, status, date, teams(name), inspection_types(name)')
         .eq('date', today)
-      setAllBookings((bookings ?? []) as unknown as Booking[])
-    })()
-    return () => { active = false }
-  }, [supabase, today])
+      
+      if (bookingsError) throw bookingsError
+
+      if (active) {
+        setAllBookings((bookings ?? []) as unknown as Booking[])
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load calendar data'
+      if (active) {
+        setError(errorMessage)
+        toast.error(errorMessage)
+      }
+      console.error('Error loading calendar data:', err)
+    } finally {
+      if (active) {
+        setLoading(false)
+      }
+    }
+  }, [supabase, today, user, authLoading])
+
+  useEffect(() => {
+    fetchData()
+    return () => { /* cleanup handled by active flag */ }
+  }, [fetchData])
 
   const gridTimes = getSlots('09:00', '19:00', 120)
   const grid = gridTimes.map(time =>
@@ -128,110 +207,270 @@ export default function ScrutineeringCalendarDay() {
     )]
   )
 
-  const typeColors: Record<string, string> = {
-    Electrical: 'bg-yellow-100 text-yellow-700',
-    Mechanical: 'bg-blue-100 text-blue-700',
-    Accumulator: 'bg-green-100 text-green-700',
+  const typeColors: Record<string, { bg: string; text: string; border: string; gradient: string }> = {
+    Electrical: { 
+      bg: 'bg-yellow-50', 
+      text: 'text-yellow-800', 
+      border: 'border-yellow-300',
+      gradient: 'from-yellow-50 to-yellow-100/50'
+    },
+    Mechanical: { 
+      bg: 'bg-blue-50', 
+      text: 'text-blue-800', 
+      border: 'border-blue-300',
+      gradient: 'from-blue-50 to-blue-100/50'
+    },
+    Accumulator: { 
+      bg: 'bg-green-50', 
+      text: 'text-green-800', 
+      border: 'border-green-300',
+      gradient: 'from-green-50 to-green-100/50'
+    },
+  }
+
+  if (authLoading || loading) {
+    return (
+      <div className="p-4 sm:p-6 md:p-8 flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-gray-600 font-medium">Loading calendar...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-5">
-      <header className="flex flex-col items-center gap-0 mb-4">
-        <h1 className="text-2xl font-extrabold mb-1">Scrutineering Grid - Today</h1>
-        <div className="text-sm font-medium text-slate-500 tracking-wide">
-          {new Date(today).toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "short", day: "numeric" })}
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+            <Calendar className="w-8 h-8 text-primary" />
+            Scrutineering Calendar
+          </h1>
+          <div className="mt-2 flex items-center gap-2 text-gray-600">
+            <Clock className="w-4 h-4" />
+            <p className="text-base font-medium">
+              {new Date(today).toLocaleDateString(undefined, { 
+                weekday: "long", 
+                year: "numeric", 
+                month: "long", 
+                day: "numeric" 
+              })}
+            </p>
+          </div>
         </div>
-      </header>
-      <div className="overflow-x-auto bg-slate-50 p-4 rounded-2xl shadow border">
-        <div className="grid" style={{
-          gridTemplateColumns: `minmax(70px,1fr) repeat(${inspectionTypes.length}, minmax(180px,1fr))`,
-          gap: "2rem"
-        }}>
-          {/* Grid header row */}
-          <div key="calendar-time-header" className="font-semibold text-gray-500 text-xs text-center mb-2">Time</div>
-          {inspectionTypes.map(type =>
-            <div key={`calendar-header-${type.id}`} className={`font-semibold px-2 py-1 rounded mb-2 text-center border shadow-sm ${typeColors[type.name] || "bg-slate-100 text-slate-700"}`}>
-              {type.name}
+        {error && (
+          <Button
+            onClick={fetchData}
+            variant="outline"
+            className="gap-2"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Retry
+          </Button>
+        )}
+      </div>
+
+      {/* Error State */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <div>
+                <p className="font-semibold">Error loading calendar</p>
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
             </div>
-          )}
-          {/* Grid time + types row-by-row */}
-          {grid.map((row, idx) => {
-            const timeSlot = row[0] as string
-            const bookings = row.slice(1) as (Booking | undefined)[]
-            return (
-              <React.Fragment key={`calendar-row-${timeSlot}`}>
-                <div key={`calendar-time-${timeSlot}`} className="py-1 px-2 font-mono text-sm text-gray-500 text-center border-l-2 border-transparent">{timeSlot}</div>
-                {bookings.map((booking: Booking | undefined, colIdx) => {
-                  const type = inspectionTypes[colIdx]
-                  const isBooked = !!booking
-                  const isYours = isBooked && booking?.team_id === teamId
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Calendar Grid */}
+      {!error && (
+        <Card className="shadow-lg border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-primary" />
+              Today&rsquo;s Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="overflow-x-auto bg-gradient-to-br from-gray-50 to-white p-4 sm:p-6 rounded-xl border border-gray-200 shadow-inner">
+              <div className="grid" style={{
+                gridTemplateColumns: `minmax(80px,1fr) repeat(${inspectionTypes.length}, minmax(200px,1fr))`,
+                gap: "1.5rem"
+              }}>
+                {/* Grid header row */}
+                <div key="calendar-time-header" className="font-bold text-gray-700 text-sm text-center mb-2 flex items-center justify-center">
+                  <Clock className="w-4 h-4 mr-1" />
+                  Time
+                </div>
+                {inspectionTypes.map(type => {
+                  const colors = typeColors[type.name] || { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', gradient: 'from-gray-50 to-gray-100/50' }
                   return (
-                    <div
-                      key={`calendar-${timeSlot}-${type?.id}-${booking?.id ?? colIdx}`}
-                      className={`mb-1 rounded-lg flex flex-col items-center justify-center border shadow-sm px-1.5 py-2 bg-white min-h-[54px] ${
-                        isBooked
-                          ? (isYours
-                            ? "bg-emerald-100 border-emerald-300"
-                            : "bg-gray-100 border-gray-200 ring-0")
-                          : "hover:bg-primary/10 cursor-pointer"
-                      }`}
+                    <div 
+                      key={`calendar-header-${type.id}`} 
+                      className={`font-bold px-4 py-3 rounded-lg mb-2 text-center border-2 shadow-md bg-gradient-to-r ${colors.gradient} ${colors.border} ${colors.text} flex items-center justify-center gap-2`}
                     >
-                      {isBooked ? (
-                        <>
-                          <span className={`inline-block text-xs font-bold whitespace-pre-wrap ${isYours ? "text-emerald-800" : "text-gray-600"}`}>
-                            {isYours ? "Your Team" : "Reserved"}
-                          </span>
-                          <span className="text-xxs text-gray-400 font-medium">
-                            {getTeamName(booking)}
-                          </span>
-                          <span className="mt-0.5 block text-xs text-gray-400">{booking?.start_time}</span>
-                        </>
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="text-xs w-full max-w-[100px] shadow"
-                          variant="outline"
-                          onClick={() => router.push('/scrutineering/book')}
-                        >
-                          + Book
-                        </Button>
-                      )}
+                      {TYPE_ICONS[type.name]}
+                      {type.name}
                     </div>
                   )
                 })}
-              </React.Fragment>
-            )
-          })}
-        </div>
-      </div>
-      {/* Agenda/Booked panel */}
-      <aside className="max-w-2xl mx-auto my-10">
-        <h2 className="text-base font-semibold mb-3">Booked Inspections (Today)</h2>
-        <div className="flex flex-col gap-2">
-          {allBookings.length === 0 ? (
-            <div className="rounded border p-6 text-center text-gray-500 bg-white">No bookings for today.</div>
-          ) : (
-            allBookings.map(b => (
-              <div key={`panel-card-${b.id}`} className="border rounded-lg bg-white p-4 flex flex-col sm:flex-row justify-between items-center shadow">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 w-full">
-                  <div className="font-bold flex gap-2 items-center">
-                    {/* Inspection type always shown */}
-                    <span>{getInspectionTypeName(b)}</span>
-                    <span className="font-medium text-gray-600">{getTeamName(b)}</span>
-                  </div>
-                  <div className="text-gray-500 text-sm">
-                    {b.start_time}
-                    {b.resource_index ? <>, Lane {b.resource_index}</> : null}
-                  </div>
-                </div>
-                <div>
-                  <Badge>{b.status}</Badge>
-                </div>
+                {/* Grid time + types row-by-row */}
+                {grid.map((row, idx) => {
+                  const timeSlot = row[0] as string
+                  const bookings = row.slice(1) as (Booking | undefined)[]
+                  return (
+                    <React.Fragment key={`calendar-row-${timeSlot}`}>
+                      <div 
+                        key={`calendar-time-${timeSlot}`} 
+                        className="py-3 px-2 font-mono text-sm font-semibold text-gray-700 text-center border-l-2 border-primary/30 bg-gray-50/50 rounded-l-lg"
+                      >
+                        {timeSlot}
+                      </div>
+                      {bookings.map((booking: Booking | undefined, colIdx) => {
+                        const type = inspectionTypes[colIdx]
+                        const isBooked = !!booking
+                        const isYours = isBooked && booking?.team_id === teamId
+                        const statusInfo = booking?.status ? STATUS_COLORS[booking.status.toLowerCase()] : null
+                        return (
+                          <div
+                            key={`calendar-${timeSlot}-${type?.id}-${booking?.id ?? colIdx}`}
+                            className={`mb-2 rounded-lg flex flex-col items-center justify-center border-2 shadow-md transition-all duration-200 px-2 py-3 min-h-[70px] ${
+                              isBooked
+                                ? (isYours
+                                  ? "bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-400 shadow-emerald-200/50 hover:shadow-lg"
+                                  : "bg-gradient-to-br from-gray-50 to-gray-100/50 border-gray-300 hover:shadow-lg")
+                                : "bg-white hover:bg-primary/5 hover:border-primary/30 cursor-pointer hover:shadow-lg"
+                            }`}
+                          >
+                            {isBooked ? (
+                              <>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                  {statusInfo?.icon}
+                                  <span className={`text-xs font-bold ${isYours ? "text-emerald-800" : "text-gray-700"}`}>
+                                    {isYours ? "Your Team" : "Reserved"}
+                                  </span>
+                                </div>
+                                <span className={`text-xs font-semibold ${isYours ? "text-emerald-700" : "text-gray-600"} mb-1`}>
+                                  {getTeamName(booking)}
+                                </span>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <Clock className="w-3 h-3 text-gray-400" />
+                                  <span className="text-xs text-gray-500">{booking?.start_time}</span>
+                                </div>
+                                {booking?.resource_index && (
+                                  <Badge variant="outline" className="mt-1 text-xs">
+                                    Lane {booking.resource_index}
+                                  </Badge>
+                                )}
+                              </>
+                            ) : (
+                              <Button
+                                size="sm"
+                                className="text-xs w-full max-w-[120px] shadow-md hover:shadow-lg transition-all duration-200"
+                                variant="outline"
+                                onClick={() => router.push('/scrutineering/book')}
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                Book Slot
+                              </Button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </React.Fragment>
+                  )
+                })}
               </div>
-            ))
-          )}
-        </div>
-      </aside>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {/* Agenda/Booked panel */}
+      {!error && (
+        <Card className="shadow-lg border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-primary" />
+              Today&rsquo;s Bookings
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            {allBookings.length === 0 ? (
+              <div className="rounded-lg border-2 border-dashed border-gray-200 p-12 text-center bg-gray-50">
+                <Calendar className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-gray-500 font-medium">No bookings scheduled for today</p>
+                <p className="text-sm text-gray-400 mt-1">Book an inspection slot to get started</p>
+                <Button
+                  onClick={() => router.push('/scrutineering/book')}
+                  className="mt-4 gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Book Inspection
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {allBookings.map(b => {
+                  const typeName = getInspectionTypeName(b)
+                  const teamName = getTeamName(b)
+                  const colors = typeColors[typeName] || { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', gradient: 'from-gray-50 to-gray-100/50' }
+                  const statusInfo = b.status ? STATUS_COLORS[b.status.toLowerCase()] : null
+                  const isYours = b.team_id === teamId
+                  
+                  return (
+                    <div 
+                      key={`panel-card-${b.id}`} 
+                      className={`border-2 rounded-xl p-4 flex flex-col gap-3 shadow-md hover:shadow-lg transition-all duration-200 ${
+                        isYours 
+                          ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-emerald-300' 
+                          : `bg-gradient-to-br ${colors.gradient} ${colors.border}`
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            {TYPE_ICONS[typeName]}
+                            <span className={`font-bold text-base ${colors.text}`}>
+                              {typeName}
+                            </span>
+                            {isYours && (
+                              <Badge className="bg-emerald-600 text-white">Your Team</Badge>
+                            )}
+                          </div>
+                          <p className="font-semibold text-gray-900 mb-1">{teamName}</p>
+                          <div className="flex items-center gap-4 text-sm text-gray-600">
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>{b.start_time}</span>
+                            </div>
+                            {b.resource_index && (
+                              <Badge variant="outline" className="text-xs">
+                                Lane {b.resource_index}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        {statusInfo && (
+                          <Badge className={`${statusInfo.bg} ${statusInfo.text} border-0 flex items-center gap-1`}>
+                            {statusInfo.icon}
+                            {b.status}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

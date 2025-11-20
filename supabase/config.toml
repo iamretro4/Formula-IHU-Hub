@@ -119,7 +119,11 @@ enabled = true
 # in emails.
 site_url = "http://127.0.0.1:3000"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  "https://127.0.0.1:3000",
+  "http://127.0.0.1:3000/auth/reset-password",
+  "https://127.0.0.1:3000/auth/reset-password"
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # Path to JWT signing key. DO NOT commit your signing keys file to git.
@@ -143,7 +147,8 @@ password_requirements = ""
 
 [auth.rate_limit]
 # Number of emails that can be sent per hour. Requires auth.email.smtp to be enabled.
-email_sent = 2
+# Resend allows up to 100 emails/day on free tier, so setting to 10 per hour is safe
+email_sent = 10
 # Number of SMS messages that can be sent per hour. Requires auth.sms to be enabled.
 sms_sent = 30
 # Number of anonymous sign-ins that can be made per hour per IP address. Requires enable_anonymous_sign_ins = true.
@@ -180,15 +185,20 @@ otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
 otp_expiry = 3600
 
-# Use a production-ready SMTP server
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.sendgrid.net"
-# port = 587
-# user = "apikey"
-# pass = "env(SENDGRID_API_KEY)"
-# admin_email = "admin@email.com"
-# sender_name = "Admin"
+# Use Resend SMTP server for email delivery
+# IMPORTANT: Before emails will come from noreply@fihu.gr:
+# 1. Verify your domain (fihu.gr) in Resend dashboard (REQUIRED!)
+# 2. Add DNS records (SPF, DKIM, DMARC) as instructed by Resend
+# 3. Wait for domain verification (can take up to 24 hours)
+# 4. Until domain is verified, emails will come from Resend's default sender
+[auth.email.smtp]
+enabled = true
+host = "smtp.resend.com"
+port = 587  # Using TLS port (465 might have SSL issues)
+user = "resend"
+pass = "env(RESEND_API_KEY)"  # API key is stored in .env file
+admin_email = "noreply@fihu.gr"
+sender_name = "Formula IHU Hub"
 
 # Uncomment to customize email template
 # [auth.email.template.invite]

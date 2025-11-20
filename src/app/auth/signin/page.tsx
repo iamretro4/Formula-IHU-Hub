@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import Image from 'next/image'
+import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
@@ -11,21 +12,18 @@ import {
   EyeIcon,
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/types/database'
-
-// Use createBrowserClient from @supabase/ssr for proper cookie handling in Next.js 15
-const supabase = createBrowserClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { Mail, Lock, LogIn, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import getSupabaseClient from '@/lib/supabase/client'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 
 export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const redirectHandled = useRef(false)
+  const [logoError, setLogoError] = useState(false)
 
   const {
     register,
@@ -41,6 +39,7 @@ export default function SignInPage() {
     
     const checkAuth = async () => {
       try {
+        const supabase = getSupabaseClient()
         // Use getUser() which validates the token with Supabase Auth server
         // This ensures we only redirect if there's a truly valid authenticated user
         const { data: { user }, error } = await supabase.auth.getUser()
@@ -48,7 +47,7 @@ export default function SignInPage() {
         // Only redirect if we have a valid user (token is valid) and no error
         if (mounted && user && !error) {
           // User is actually authenticated, redirect
-          window.location.href = '/dashboard'
+          window.location.assign('/dashboard')
         }
         // Otherwise, stay on sign-in page
       } catch (err) {
@@ -63,12 +62,13 @@ export default function SignInPage() {
     }, 300)
 
     // Listen for auth state changes and redirect on sign in
+    const supabase = getSupabaseClient()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user && !redirectHandled.current) {
         redirectHandled.current = true
         // Small delay to ensure cookies are set
         setTimeout(() => {
-          window.location.href = '/dashboard'
+          window.location.assign('/dashboard')
         }, 100)
       }
     })
@@ -80,17 +80,20 @@ export default function SignInPage() {
     }
   }, [router])
 
-  const onSubmit = async (data: SignInInput) => {
+  const onSubmit = useCallback(async (data: SignInInput) => {
     setIsLoading(true)
+    setError(null)
     redirectHandled.current = false
     
     try {
+      const supabase = getSupabaseClient()
       const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       })
       
       if (error) {
+        setError(error.message || 'Invalid email or password')
         toast.error(error.message || 'Invalid email or password')
         setIsLoading(false)
         return
@@ -103,7 +106,7 @@ export default function SignInPage() {
         // Wait a moment for cookies to be set by Supabase
         await new Promise(resolve => setTimeout(resolve, 200))
         // Force a full page reload to ensure cookies are set and middleware sees the session
-        window.location.href = '/dashboard'
+        window.location.assign('/dashboard')
         return
       }
 
@@ -111,104 +114,192 @@ export default function SignInPage() {
       setTimeout(async () => {
         if (redirectHandled.current) return
         
+        const supabase = getSupabaseClient()
         const { data: { session } } = await supabase.auth.getSession()
         if (session && !redirectHandled.current) {
           redirectHandled.current = true
           toast.success('Signed in successfully!')
-          window.location.href = '/dashboard'
+          window.location.assign('/dashboard')
         } else {
           setIsLoading(false)
+          setError('Session not established. Please try again.')
           toast.error('Session not established. Please try again.')
         }
       }, 1000)
     } catch (err) {
-      toast.error('An error occurred. Please try again.')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
+      setError(errorMessage)
+      toast.error(errorMessage)
       setIsLoading(false)
     }
-  }
+  }, [])
+
+  const handleFormSubmit = useCallback(
+    (event: FormEvent<HTMLFormElement>) => {
+      void handleSubmit(onSubmit)(event)
+    },
+    [handleSubmit, onSubmit]
+  )
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-white to-primary/5 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
+      </div>
+
+      <div className="max-w-md w-full space-y-8 relative z-10 animate-fade-in">
+        {/* Logo and Header */}
         <div className="text-center">
-          <div className="mx-auto w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center">
-            <ClipboardDocumentCheckIcon className="w-8 h-8 text-white" />
+          <div className="mx-auto w-24 h-24 bg-gradient-to-br from-primary via-primary/90 to-primary/80 rounded-2xl flex items-center justify-center shadow-2xl mb-6 ring-4 ring-primary/20 transform hover:scale-105 transition-transform duration-300">
+            {logoError ? (
+              <ClipboardDocumentCheckIcon className="w-12 h-12 text-white" />
+            ) : (
+              <Image
+                src="/formula-ihu-logo.png"
+                alt="Formula IHU"
+                width={56}
+                height={56}
+                className="w-14 h-14 object-contain"
+                priority
+                onError={() => setLogoError(true)}
+              />
+            )}
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Sign in to Scrutineer Hub
+          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+            Welcome Back
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Professional scrutineering platform for formula racing
+          <p className="mt-3 text-base text-gray-600">
+            Sign in to access your Formula IHU Hub account
           </p>
         </div>
-        <div className="card p-8">
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            <div>
-              <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                {...register('email')}
-                className="form-input"
-                placeholder="Enter your email"
-                autoComplete="email"
-              />
+
+        {/* Form Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 p-8 sm:p-10 hover:shadow-3xl transition-all duration-300">
+          {error && (
+            <Alert variant="destructive" className="mb-6 animate-fade-in">
+              <AlertCircle className="w-4 h-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <form onSubmit={handleFormSubmit} className="space-y-6">
+            {/* Email Field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-gray-500" />
+                Email Address
+              </label>
+              <div className="relative">
+                <input
+                  type="email"
+                  {...register('email')}
+                  className={`w-full px-4 py-3 pl-11 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+                    errors.email 
+                      ? 'border-red-300 bg-red-50 focus:border-red-500' 
+                      : 'border-gray-300 bg-white focus:border-primary'
+                  }`}
+                  placeholder="your.email@university.gr"
+                  autoComplete="email"
+                  disabled={isLoading}
+                />
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
               {errors.email && (
-                <p className="text-sm text-red-600 mt-1">{errors.email.message}</p>
+                <p className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.email.message}
+                </p>
               )}
             </div>
-            <div>
-              <label className="form-label">Password</label>
+
+            {/* Password Field */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                <Lock className="w-4 h-4 text-gray-500" />
+                Password
+              </label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   {...register('password')}
-                  className="form-input pr-10"
+                  className={`w-full px-4 py-3 pl-11 pr-12 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
+                    errors.password 
+                      ? 'border-red-300 bg-red-50 focus:border-red-500' 
+                      : 'border-gray-300 bg-white focus:border-primary'
+                  }`}
                   placeholder="Enter your password"
                   autoComplete="current-password"
+                  disabled={isLoading}
                 />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                  disabled={isLoading}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="w-5 h-5 text-gray-400" />
+                    <EyeSlashIcon className="w-5 h-5" />
                   ) : (
-                    <EyeIcon className="w-5 h-5 text-gray-400" />
+                    <EyeIcon className="w-5 h-5" />
                   )}
                 </button>
               </div>
               {errors.password && (
-                <p className="text-sm text-red-600 mt-1">{errors.password.message}</p>
+                <p className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in">
+                  <AlertCircle className="w-4 h-4" />
+                  {errors.password.message}
+                </p>
               )}
             </div>
+
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full btn-primary"
+              className="w-full bg-gradient-to-r from-primary via-primary/90 to-primary hover:from-primary/90 hover:via-primary hover:to-primary/90 text-white font-semibold py-3.5 px-6 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center justify-center gap-2 transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {isLoading ? (
                 <>
-                  <div className="spinner mr-2" />
-                  Signing in...
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Signing in...</span>
                 </>
               ) : (
-                'Sign In'
+                <>
+                  <LogIn className="w-5 h-5" />
+                  <span>Sign In</span>
+                </>
               )}
             </button>
           </form>
-          <div className="mt-6 text-center space-y-2">
-            <p className="text-sm text-gray-600">
-              Don't have an account?{' '}
-              <Link href="/auth/signup" className="text-indigo-600 hover:text-indigo-700 font-medium">
+
+          {/* Footer Links */}
+          <div className="mt-8 pt-6 border-t border-gray-200 space-y-3">
+            <p className="text-center text-sm text-gray-600">
+              Don&rsquo;t have an account?{' '}
+              <Link 
+                href="/auth/signup" 
+                className="text-primary hover:text-primary/80 font-semibold transition-colors underline-offset-2 hover:underline"
+              >
                 Sign up here
               </Link>
             </p>
-            <Link href="/auth/forgot-password" className="text-sm text-indigo-600 hover:text-indigo-700">
+            <Link 
+              href="/auth/forgot-password" 
+              className="block text-center text-sm text-primary hover:text-primary/80 transition-colors underline-offset-2 hover:underline font-medium"
+            >
               Forgot your password?
             </Link>
           </div>
         </div>
+
+        {/* Additional Info */}
+        <p className="text-center text-xs text-gray-500">
+          By signing in, you agree to our terms of service and privacy policy
+        </p>
       </div>
     </div>
   )

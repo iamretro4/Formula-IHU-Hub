@@ -1,12 +1,29 @@
 'use client'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import getSupabaseClient from '@/lib/supabase/client'
 import { Database } from '@/lib/types/database'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Save, CheckCircle, Edit, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { 
+  Loader2, 
+  Save, 
+  CheckCircle, 
+  Edit, 
+  ThumbsUp, 
+  ThumbsDown, 
+  Award,
+  Users,
+  Calendar,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  FileText,
+  TrendingUp,
+  Clock,
+  MessageSquare
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -15,6 +32,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import toast from 'react-hot-toast'
+import { logger } from '@/lib/utils/logger'
 
 type ScoreStatus = 'pending' | 'approved' | 'rejected'
 
@@ -82,10 +101,7 @@ type ScoringFormData = z.infer<typeof scoringFormSchema>;
 export default function DesignEventScore() {
   const params = useParams<{ bookingId: string }>()
   const paramBookingId = params?.bookingId
-  const supabase = useMemo(() => createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ), [])
+  const supabase = useMemo(() => getSupabaseClient(), [])
   const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
@@ -93,6 +109,7 @@ export default function DesignEventScore() {
   const [submittedScores, setSubmittedScores] = useState<JudgedEventScore[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [approvingBookingId, setApprovingBookingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [editingScore, setEditingScore] = useState<JudgedEventScore | null>(null)
@@ -186,8 +203,10 @@ export default function DesignEventScore() {
         }
       } catch (err) {
         if (active && currentRunId === effectRunIdRef.current) {
-          console.error('Error loading initial data:', err);
-          setError(err instanceof Error ? err.message : 'Failed to load initial data.');
+          const error = err instanceof Error ? err : new Error('Unknown error')
+          setError(error.message);
+          toast.error(error.message);
+          logger.error('[Design Event] Error loading data', err);
         }
       } finally {
         if (active && currentRunId === effectRunIdRef.current) {
@@ -199,7 +218,7 @@ export default function DesignEventScore() {
     return () => { active = false }
   }, [supabase]);
 
-  // Per-booking score form populator, with logs
+  // Per-booking score form populator
   useEffect(() => {
     if (selectedBookingId && criteria.length > 0 && currentUser) {
       setError(null);
@@ -236,6 +255,18 @@ export default function DesignEventScore() {
     return formScores.reduce((sum, entry) => sum + (entry.score || 0), 0);
   }, [formScores]);
 
+  // Group scores by booking for bulk approval
+  const scoresByBooking = useMemo(() => {
+    const grouped: Record<string, JudgedEventScore[]> = {};
+    submittedScores.forEach(score => {
+      if (!grouped[score.booking_id]) {
+        grouped[score.booking_id] = [];
+      }
+      grouped[score.booking_id].push(score);
+    });
+    return grouped;
+  }, [submittedScores]);
+
   // --- ROLE LOGIC ---
   const role = currentUser?.app_role;
   const canScore = role === 'admin' || role?.startsWith('design_judge') || role === 'design_judge_overall';
@@ -270,25 +301,101 @@ export default function DesignEventScore() {
         .upsert(payload as any, { onConflict: 'booking_id,criterion_id,judge_id' });
       if (upsertError) throw upsertError;
 
-      setSuccessMessage('Scores saved successfully!');
+      toast.success('Scores saved successfully!');
       await refreshScoresPanel();
       reset(data);
     } catch (err) {
-      console.error('Error saving scores:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save scores.');
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      setError(error.message);
+      toast.error(error.message);
+      logger.error('[Design Event] Error saving scores', err);
     } finally {
       setIsSaving(false);
     }
   };
 
+  async function handleApproveAll(bookingId: string) {
+    if (!confirm('Approve all scores for this design slot? This will approve all categories at once.')) {
+      return;
+    }
+    
+    setApprovingBookingId(bookingId);
+    try {
+      const { error: updateError } = await supabase
+        .from('judged_event_scores')
+        .update({ status: 'approved' } as any)
+        .eq('booking_id', bookingId);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('All scores approved successfully!');
+      await refreshScoresPanel();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      toast.error(error.message || 'Failed to approve scores');
+      logger.error('[Design Event] Error approving all scores', err);
+    } finally {
+      setApprovingBookingId(null);
+    }
+  }
+
+  async function handleRejectAll(bookingId: string) {
+    if (!confirm('Reject all scores for this design slot? This will reject all categories at once.')) {
+      return;
+    }
+    
+    setApprovingBookingId(bookingId);
+    try {
+      const { error: updateError } = await supabase
+        .from('judged_event_scores')
+        .update({ status: 'rejected' } as any)
+        .eq('booking_id', bookingId);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('All scores rejected');
+      await refreshScoresPanel();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      toast.error(error.message || 'Failed to reject scores');
+      logger.error('[Design Event] Error rejecting all scores', err);
+    } finally {
+      setApprovingBookingId(null);
+    }
+  }
+
   async function handleApprove(id: string) {
-    await supabase.from('judged_event_scores').update({ status: 'approved' } as any).eq('id', id)
-    refreshScoresPanel()
+    try {
+      const { error: updateError } = await supabase
+        .from('judged_event_scores')
+        .update({ status: 'approved' } as any)
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('Score approved');
+      await refreshScoresPanel();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      toast.error(error.message || 'Failed to approve score');
+    }
   }
 
   async function handleReject(id: string) {
-    await supabase.from('judged_event_scores').update({ status: 'rejected' } as any).eq('id', id)
-    refreshScoresPanel()
+    try {
+      const { error: updateError } = await supabase
+        .from('judged_event_scores')
+        .update({ status: 'rejected' } as any)
+        .eq('id', id);
+      
+      if (updateError) throw updateError;
+      
+      toast.success('Score rejected');
+      await refreshScoresPanel();
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('Unknown error')
+      toast.error(error.message || 'Failed to reject score');
+    }
   }
 
   function handleEdit(score: JudgedEventScore) {
@@ -298,10 +405,22 @@ export default function DesignEventScore() {
 
   async function handleSaveEdit() {
     if (editingScore && editValue != null) {
-      await supabase.from('judged_event_scores').update({ score: editValue } as any).eq('id', editingScore.id)
-      setEditingScore(null)
-      setEditValue(null)
-      refreshScoresPanel()
+      try {
+        const { error: updateError } = await supabase
+          .from('judged_event_scores')
+          .update({ score: editValue } as any)
+          .eq('id', editingScore.id);
+        
+        if (updateError) throw updateError;
+        
+        toast.success('Score updated');
+        setEditingScore(null)
+        setEditValue(null)
+        await refreshScoresPanel();
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Unknown error')
+        toast.error(error.message || 'Failed to update score');
+      }
     }
   }
 
@@ -328,136 +447,374 @@ export default function DesignEventScore() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading event data...</span>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-gray-600 font-medium">Loading design event data...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {canScore && (
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">Design Event Scoring</CardTitle>
-            <CardDescription>Admins & Judges: Score your assigned teams, criterion-by-criterion (with comments).</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {error && (<Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>)}
-              {successMessage && (<Alert variant="default" className="bg-green-100 border-green-500 text-green-800"><CheckCircle className="h-4 w-4" /><AlertDescription>{successMessage}</AlertDescription></Alert>)}
-              <div className="space-y-2">
-                <Label htmlFor="bookingId">Select a team booking:</Label>
-                <Select onValueChange={(value) => setValue('bookingId', value)} value={selectedBookingId}>
-                  <SelectTrigger><SelectValue placeholder="Select Booking" /></SelectTrigger>
-                  <SelectContent>
-                    {bookings.map((booking) => (
-                      <SelectItem key={booking.id} value={booking.id}>
-                        {booking.teams?.code} - {booking.teams?.name} ({booking.scheduled_time ? new Date(booking.scheduled_time).toLocaleString() : 'N/A'})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.bookingId && (<p className="text-sm text-red-600">{errors.bookingId.message}</p>)}
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 animate-fade-in min-h-screen">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+          <Award className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
+          Engineering Design Event Scoring
+        </h1>
+        <p className="text-gray-600 max-w-2xl">
+          Score teams across all design criteria. Admins and overall judges can approve entire design slots at once.
+        </p>
+      </div>
+
+      {/* Error Alert */}
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <div>
+                <p className="font-semibold">Error</p>
+                <p className="text-sm text-red-600">{error}</p>
               </div>
-              {selectedBookingId && criteria.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {criteria.map((criterion, index) => (
-                      <div key={criterion.id} className="space-y-2 border-b pb-2 mb-2">
-                        <Label htmlFor={`scores.${index}.score`}>{criterion.title} (Max: {criterion.max_score})</Label>
-                        <Input id={`scores.${index}.score`} type="number" min={0} max={criterion.max_score}
-                          placeholder="0" {...register(`scores.${index}.score`, { valueAsNumber: true })} />
-                        {errors.scores?.[index]?.score && (
-                          <p className="text-sm text-red-600">{errors.scores[index]?.score?.message}</p>
-                        )}
-                        <Label htmlFor={`scores.${index}.comment`}>Comment</Label>
-                        <Textarea id={`scores.${index}.comment`} placeholder="Provide feedback..."
-                          {...register(`scores.${index}.comment`)} />
-                        {errors.scores?.[index]?.comment && (
-                          <p className="text-sm text-red-600">{errors.scores[index]?.comment?.message}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="text-2xl font-bold text-center py-4 border-t border-b">
-                    Total Score: {totalScore} / {criteria.reduce((sum, c) => sum + c.max_score, 0)}
-                  </div>
-                  <Button type="submit" className="w-full" disabled={isSaving || !isDirty}>
-                    {isSaving ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving Scores...</>) : (<><Save className="mr-2 h-4 w-4" />Save Score</>)}
-                  </Button>
-                </>
-              ) : (<p className="text-center text-muted-foreground">Please select a booking to begin scoring.</p>)}
-            </form>
+            </div>
           </CardContent>
         </Card>
       )}
-      {/* Admins & Overall Design Judges: All Scores, Approve/Edit */}
-      {canEditAll && (
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>All Submitted Scores</CardTitle>
-            <CardDescription>Admins & Overall Judges: Edit, Approve, Reject</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {submittedScores.length === 0 ? (<p className="text-center text-muted-foreground">No scores yet.</p>)
-              : submittedScores.map(scoreEntry => (
-                  <div key={scoreEntry.id} className="border rounded-lg p-3 flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold">{scoreEntry.judged_event_bookings?.teams?.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Judge: {scoreEntry.user_profiles?.first_name} {scoreEntry.user_profiles?.last_name}
-                      </div>
-                      <div>
-                        Score: {editingScore?.id === scoreEntry.id ? (
-                          <Input type="number" value={editValue ?? scoreEntry.score ?? ''} onChange={e => setEditValue(Number(e.target.value))} className="w-20" />
-                        ) : (<span className="font-bold">{scoreEntry.score ?? '-'}</span>)}
-                      </div>
-                      {scoreEntry.comment && (<div className="mt-1 text-sm text-gray-700 italic">Comment: {scoreEntry.comment}</div>)}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Scoring Form */}
+        {canScore && (
+          <Card className="lg:col-span-2 shadow-lg border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5" />
+                Design Event Scoring
+              </CardTitle>
+              <CardDescription>
+                Score your assigned teams criterion-by-criterion with comments
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                <div className="space-y-2">
+                  <Label htmlFor="bookingId" className="text-base font-semibold flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Select Team Booking
+                  </Label>
+                  <Select onValueChange={(value) => setValue('bookingId', value)} value={selectedBookingId}>
+                    <SelectTrigger className="h-11">
+                      <SelectValue placeholder="Select a team booking..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {bookings.map((booking) => (
+                        <SelectItem key={booking.id} value={booking.id}>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">{booking.teams?.code}</Badge>
+                            <span>{booking.teams?.name}</span>
+                            {booking.scheduled_time && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                ({new Date(booking.scheduled_time).toLocaleString()})
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {errors.bookingId && (
+                    <p className="text-sm text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-4 h-4" />
+                      {errors.bookingId.message}
+                    </p>
+                  )}
+                </div>
+
+                {selectedBookingId && criteria.length > 0 ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {criteria.map((criterion, index) => (
+                        <Card key={criterion.id} className="border-gray-200 shadow-sm">
+                          <CardContent className="pt-6">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Label htmlFor={`scores.${index}.score`} className="text-base font-semibold">
+                                  {criterion.title}
+                                </Label>
+                                <Badge variant="outline" className="text-xs">
+                                  Max: {criterion.max_score}
+                                </Badge>
+                              </div>
+                              <Input 
+                                id={`scores.${index}.score`} 
+                                type="number" 
+                                min={0} 
+                                max={criterion.max_score}
+                                placeholder="0" 
+                                className="h-11 text-base"
+                                {...register(`scores.${index}.score`, { valueAsNumber: true })} 
+                              />
+                              {errors.scores?.[index]?.score && (
+                                <p className="text-sm text-red-600 flex items-center gap-1">
+                                  <AlertCircle className="w-4 h-4" />
+                                  {errors.scores[index]?.score?.message}
+                                </p>
+                              )}
+                              <div className="space-y-2">
+                                <Label htmlFor={`scores.${index}.comment`} className="text-sm flex items-center gap-2">
+                                  <MessageSquare className="w-4 h-4" />
+                                  Comment
+                                </Label>
+                                <Textarea 
+                                  id={`scores.${index}.comment`} 
+                                  placeholder="Provide feedback..." 
+                                  className="min-h-[80px]"
+                                  {...register(`scores.${index}.comment`)} 
+                                />
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
-                    <div className="flex flex-col items-center gap-1">
-                      <Badge variant={getStatusBadgeVariant(scoreEntry.status)}>{scoreEntry.status?.toUpperCase()}</Badge>
-                      <Button size="sm" variant="default" onClick={() => handleApprove(scoreEntry.id)} disabled={scoreEntry.status === 'approved'}><ThumbsUp size={14}/> Approve</Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleReject(scoreEntry.id)} disabled={scoreEntry.status === 'rejected'}><ThumbsDown size={14}/> Reject</Button>
-                      <Button size="sm" variant="secondary" onClick={() => handleEdit(scoreEntry)}><Edit size={14}/> Edit</Button>
-                      {editingScore?.id === scoreEntry.id && (
-                        <Button size="sm" variant="default" onClick={handleSaveEdit}>Save</Button>
+                    
+                    <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-primary/10">
+                      <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm text-gray-600 font-medium">Total Score</p>
+                            <p className="text-3xl font-bold text-primary">
+                              {totalScore} / {criteria.reduce((sum, c) => sum + c.max_score, 0)}
+                            </p>
+                          </div>
+                          <TrendingUp className="w-12 h-12 text-primary/30" />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Button 
+                      type="submit" 
+                      className="w-full h-12 text-base font-semibold bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary" 
+                      disabled={isSaving || !isDirty}
+                    >
+                      {isSaving ? (
+                        <>
+                          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                          Saving Scores...
+                        </>
+                      ) : (
+                        <>
+                          <Save className="mr-2 h-5 w-5" />
+                          Save Scores
+                        </>
                       )}
-                    </div>
-                  </div>
-                ))
-            }
-          </CardContent>
-        </Card>
-      )}
-      {/* Team Leaders/Viewers: Readonly View */}
-      {canViewOnly && (
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Team Scores & Feedback</CardTitle>
-            <CardDescription>View scores/comments for your team.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {submittedScores.length === 0 ? (<p className="text-center text-muted-foreground">No scores submitted yet.</p>)
-              : submittedScores.map(scoreEntry => (
-                  <div key={scoreEntry.id} className="border rounded-lg p-3">
-                    <div className="font-semibold">{scoreEntry.judged_event_bookings?.teams?.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Judge: {scoreEntry.user_profiles?.first_name} {scoreEntry.user_profiles?.last_name}
-                    </div>
-                    <div>Score: <span className="font-bold">{scoreEntry.score ?? '-'}</span></div>
-                    {scoreEntry.comment && (
-                      <div className="mt-1 text-sm text-gray-700 italic">
-                        Comment: {scoreEntry.comment}
+                    </Button>
+                  </>
+                ) : (
+                  <Card className="border-gray-200">
+                    <CardContent className="pt-6">
+                      <div className="text-center py-12">
+                        <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p className="text-gray-500 font-medium">Please select a booking to begin scoring</p>
                       </div>
-                    )}
-                    <Badge variant={getStatusBadgeVariant(scoreEntry.status)}>{scoreEntry.status?.toUpperCase()}</Badge>
-                  </div>
-                ))}
-          </CardContent>
-        </Card>
-      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Admin/Overall Judge: All Scores with Bulk Approval */}
+        {canEditAll && (
+          <Card className="lg:col-span-1 shadow-lg border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5" />
+                All Submitted Scores
+              </CardTitle>
+              <CardDescription>
+                Approve or reject entire design slots at once
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              {Object.keys(scoresByBooking).length === 0 ? (
+                <div className="text-center py-8">
+                  <Award className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500 font-medium">No scores submitted yet</p>
+                </div>
+              ) : (
+                Object.entries(scoresByBooking).map(([bookingId, scores]) => {
+                  const booking = bookings.find(b => b.id === bookingId);
+                  const team = booking?.teams;
+                  const allApproved = scores.every(s => s.status === 'approved');
+                  const allRejected = scores.every(s => s.status === 'rejected');
+                  const hasPending = scores.some(s => s.status === 'pending');
+                  const totalScore = scores.reduce((sum, s) => sum + (s.score || 0), 0);
+                  const maxScore = criteria.reduce((sum, c) => sum + c.max_score, 0);
+                  
+                  return (
+                    <Card key={bookingId} className="border-gray-200 shadow-sm">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="font-bold">
+                                {team?.code || 'Unknown'}
+                              </Badge>
+                              <span className="font-semibold text-sm">{team?.name || 'Unknown Team'}</span>
+                            </div>
+                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-600">
+                              <div className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                {scores.length} categories
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <TrendingUp className="w-3 h-3" />
+                                {totalScore}/{maxScore} pts
+                              </div>
+                            </div>
+                          </div>
+                          <Badge 
+                            variant={allApproved ? 'default' : allRejected ? 'destructive' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {allApproved ? 'Approved' : allRejected ? 'Rejected' : 'Pending'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0 space-y-3">
+                        {/* Bulk Approval Buttons */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => handleApproveAll(bookingId)}
+                            disabled={allApproved || approvingBookingId === bookingId}
+                            className="gap-2 text-xs"
+                          >
+                            {approvingBookingId === bookingId ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <CheckCircle2 className="w-3 h-3" />
+                            )}
+                            Approve All
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => handleRejectAll(bookingId)}
+                            disabled={allRejected || approvingBookingId === bookingId}
+                            className="gap-2 text-xs"
+                          >
+                            {approvingBookingId === bookingId ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <XCircle className="w-3 h-3" />
+                            )}
+                            Reject All
+                          </Button>
+                        </div>
+
+                        {/* Individual Scores */}
+                        <div className="space-y-2 pt-2 border-t border-gray-200">
+                          {scores.map(scoreEntry => {
+                            const criterion = criteria.find(c => c.id === scoreEntry.criterion_id);
+                            return (
+                              <div key={scoreEntry.id} className="p-2 bg-gray-50 rounded text-xs">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-medium text-gray-700">
+                                    {criterion?.title || 'Unknown'}
+                                  </span>
+                                  <Badge variant={getStatusBadgeVariant(scoreEntry.status)} className="text-xs">
+                                    {scoreEntry.status?.toUpperCase()}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-gray-600">
+                                    Score: <span className="font-bold">{scoreEntry.score ?? '-'}</span>
+                                  </span>
+                                  {scoreEntry.comment && (
+                                    <span title={scoreEntry.comment}>
+                                      <MessageSquare className="w-3 h-3 text-gray-400" />
+                                    </span>
+                                  )}
+                                </div>
+                                {scoreEntry.user_profiles && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Judge: {scoreEntry.user_profiles.first_name} {scoreEntry.user_profiles.last_name}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Team Leaders/Viewers: Readonly View */}
+        {canViewOnly && (
+          <Card className="lg:col-span-1 shadow-lg border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+              <CardTitle className="flex items-center gap-2">
+                <Award className="w-5 h-5" />
+                Team Scores & Feedback
+              </CardTitle>
+              <CardDescription>
+                View scores and comments for your team
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+              {submittedScores.length === 0 ? (
+                <div className="text-center py-8">
+                  <Award className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500 font-medium">No scores submitted yet</p>
+                </div>
+              ) : (
+                submittedScores.map(scoreEntry => (
+                  <Card key={scoreEntry.id} className="border-gray-200 shadow-sm">
+                    <CardContent className="pt-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="font-bold">
+                            {scoreEntry.judged_event_bookings?.teams?.code}
+                          </Badge>
+                          <Badge variant={getStatusBadgeVariant(scoreEntry.status)}>
+                            {scoreEntry.status?.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-gray-600">Score: </span>
+                          <span className="font-bold text-lg">{scoreEntry.score ?? '-'}</span>
+                        </div>
+                        {scoreEntry.comment && (
+                          <div className="text-sm text-gray-700 italic bg-gray-50 p-2 rounded">
+                            <MessageSquare className="w-3 h-3 inline mr-1" />
+                            {scoreEntry.comment}
+                          </div>
+                        )}
+                        {scoreEntry.user_profiles && (
+                          <div className="text-xs text-gray-500">
+                            Judge: {scoreEntry.user_profiles.first_name} {scoreEntry.user_profiles.last_name}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

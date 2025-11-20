@@ -1,23 +1,18 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/types/database'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import getSupabaseClient from '@/lib/supabase/client'
 import {
-  LayoutDashboard, Trophy, CalendarDays, ClipboardCheck, CheckSquare, Flag,
-  ActivitySquare, PenSquare, FileText, Factory, MessageCircle, User, LogOut,
-  Users2, Gavel, BookOpenCheck, Settings, ListChecks, BarChart3, Book, History,
-  SquareUser, LogOut as LogoutIcon
+  LayoutDashboard, Trophy, Calendar, CalendarCheck, CheckCircle2, Flag,
+  Zap, FilePenLine, FileText, Building2, MessageSquare, User, LogOut,
+  Users, Scale, FileCheck, Settings, ClipboardList, TrendingUp,
+  UserCircle, LogOut as LogoutIcon, Shield, Wrench
 } from "lucide-react"
-
-const supabase = createBrowserClient<Database>(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
 
 type NavItem = {
   label: string
@@ -28,65 +23,72 @@ type NavItem = {
 type NavSection = {
   label: string
   items: NavItem[]
+  labelRoles?: string[] // Roles that can see this section title
 }
 
 const navConfig: NavSection[] = [
   {
     label: '',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard /> },
-      { label: 'Results', href: '/results', icon: <Trophy /> }
+      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+      { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" /> }
     ]
   },
   {
     label: 'SCRUTINEERING',
+    labelRoles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member'],
     items: [
-      { label: 'Calendar', href: '/scrutineering/calendar', icon: <CalendarDays /> },
-      { label: 'Book Inspection', href: '/scrutineering/book', icon: <ClipboardCheck /> },
-      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ListChecks /> }
+      { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member'] },
+      { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'team_leader', 'inspection_responsible', 'team_member'] },
+      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible'] }
     ]
   },
   {
     label: 'TRACK EVENTS',
+    labelRoles: ['admin', 'track_marshal', 'team_leader', 'viewer'],
     items: [
-      { label: 'Track Marshal', href: '/track/marshal', icon: <Flag /> },
-      { label: 'Live Track Data', href: '/track', icon: <BarChart3 /> }
+      { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
+      { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin', 'track_marshal', 'team_leader', 'viewer'] }
     ]
   },
   {
     label: 'JUDGED EVENTS',
+    labelRoles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'team_leader', 'viewer'],
     items: [
-      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <PenSquare />,
+      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />,
         roles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'team_leader', 'viewer']
       },
-      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText />,
+      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />,
         roles: ['admin', 'bp_judge', 'design_judge_overall', 'team_leader', 'viewer']
       },
-      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Factory />,
+      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />,
         roles: ['admin', 'cm_judge', 'design_judge_overall', 'team_leader', 'viewer']
       }
     ]
   },
   {
     label: 'TEAM FEATURES',
+    labelRoles: ['admin', 'team_leader', 'team_member', 'inspection_responsible'],
     items: [
-      { label: 'Feedback Booking', href: '/feedback', icon: <MessageCircle /> }
+      { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_leader', 'team_member', 'inspection_responsible'] }
     ]
   },
   {
     label: 'ADMINISTRATION',
+    labelRoles: ['admin', 'scrutineer'],
     items: [
-      { label: 'Admin Panel', href: '/admin', icon: <Settings />, roles: ['admin'] },
-      { label: 'User Management', href: '/admin/users', icon: <Users2 />, roles: ['admin'] },
-      { label: 'System Reports', href: '/admin/reports', icon: <BookOpenCheck />, roles: ['admin', 'scrutineer'] },
-      { label: 'Penalty Management', href: '/admin/penalties', icon: <Gavel />, roles: ['admin', 'scrutineer'] }
+      { label: 'Admin Panel', href: '/admin', icon: <Shield className="w-5 h-5" />, roles: ['admin'] },
+      { label: 'User Management', href: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin', 'team_leader'] },
+      { label: 'System Reports', href: '/admin/reports', icon: <FileCheck className="w-5 h-5" />, roles: ['admin', 'scrutineer'] },
+      { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] }
     ]
   },
   {
     label: 'ACCOUNT',
+    labelRoles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'track_marshal', 'viewer'],
     items: [
-      { label: 'My Profile', href: '/settings/profile', icon: <SquareUser /> },
-      { label: 'Logout', href: '/account/logout', icon: <LogoutIcon /> }
+      { label: 'My Profile', href: '/settings/profile', icon: <UserCircle className="w-5 h-5" /> },
+      { label: 'Logout', href: '/account/logout', icon: <LogoutIcon className="w-5 h-5" /> }
     ]
   }
 ]
@@ -97,6 +99,7 @@ export default function Sidebar() {
   const { user, profile: authProfile } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [logoError, setLogoError] = useState(false)
 
   const role = authProfile?.app_role || null
   const profile = authProfile ? { first_name: authProfile.first_name, last_name: authProfile.last_name } : null
@@ -107,6 +110,7 @@ export default function Sidebar() {
     if (isLoggingOut) return
     setIsLoggingOut(true)
     try {
+      const supabase = getSupabaseClient()
       const { error } = await supabase.auth.signOut()
       if (error) throw error
       toast.success('Signed out successfully')
@@ -121,11 +125,11 @@ export default function Sidebar() {
     <>
       {/* Mobile Sidebar Toggle */}
       <button
-        className="md:hidden p-2 z-30 fixed top-4 left-3 rounded-full bg-primary text-white shadow focus:outline-none"
+        className="md:hidden p-2.5 z-30 fixed top-4 left-3 rounded-lg bg-gradient-to-br from-primary to-primary-600 text-white shadow-xl hover:shadow-2xl hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-300"
         onClick={() => setSidebarOpen(x => !x)}
         aria-label="Toggle sidebar"
       >
-        <LayoutDashboard className="w-6 h-6" />
+        <LayoutDashboard className="w-5 h-5" />
       </button>
       {/* Overlay for mobile only */}
       <div
@@ -136,24 +140,48 @@ export default function Sidebar() {
       <aside
         className={`fixed md:static inset-y-0 left-0 z-30 transition-transform md:translate-x-0 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0 w-64 h-screen bg-white border-r dark:bg-neutral-900 flex flex-col`}
-        style={{ transition: 'transform 200ms' }}
+        } md:translate-x-0 w-64 md:w-64 sm:w-56 h-screen bg-gradient-to-b from-white via-white to-gray-50/30 border-r border-gray-200 shadow-xl flex flex-col`}
+        style={{ transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}
       >
-        <div className="px-6 py-5 flex items-center gap-2 border-b">
-          <Flag className="text-primary w-7 h-7" />
-          <div>
-            <div className="font-bold text-lg">Formula IHU</div>
-            <div className="text-xs text-gray-500">Competition Hub</div>
-          </div>
+        <div className="px-6 py-5 flex items-center justify-center border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50">
+          {logoError ? (
+            <svg className="w-12 h-12 text-primary" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+            </svg>
+          ) : (
+            <Image
+              src="/formula-ihu-logo.png"
+              alt="Formula IHU Logo"
+              width={96}
+              height={48}
+              className="h-12 w-auto object-contain drop-shadow-md transition-transform duration-300 hover:scale-105"
+              priority
+              onError={() => setLogoError(true)}
+            />
+          )}
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-4">
-          {navConfig.map((section, i) => (
-            <div key={i} className="mb-4">
-              {section.label && <div className="px-3 text-xs font-bold text-gray-400 uppercase mb-2">{section.label}</div>}
-              <ul>
-                {section.items
-                  .filter(item => !item.roles || (role && item.roles.includes(role)))
-                  .map(item => (
+          {navConfig.map((section, i) => {
+            // Filter items by role
+            const visibleItems = section.items.filter(item => !item.roles || (role && item.roles.includes(role)))
+            
+            // Don't show section if no items are visible
+            if (visibleItems.length === 0) return null
+            
+            // Check if section label should be visible
+            const showLabel = section.label && (!section.labelRoles || (role && section.labelRoles.includes(role)))
+            
+            return (
+            <div key={i} className="mb-5">
+              {showLabel && (
+                <div className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+                  <span className="text-[10px]">{section.label}</span>
+                  <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent"></div>
+                </div>
+              )}
+              <ul className="space-y-1">
+                {visibleItems.map(item => (
                     <li key={item.href}>
       {item.href === '/account/logout' ? (
         <button
@@ -161,35 +189,36 @@ export default function Sidebar() {
           disabled={isLoggingOut}
           aria-label="Sign out"
           aria-busy={isLoggingOut}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition w-full text-left
-            hover:bg-primary/5 dark:hover:bg-neutral-800
-            ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}>
-          <span className="w-5 h-5">{item.icon}</span>
-          <span>{isLoggingOut ? 'Signing out...' : item.label}</span>
+          className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 w-full text-left
+            hover:bg-red-50 hover:text-red-600
+            ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : 'text-gray-700'}`}>
+          <span className="w-5 h-5 flex-shrink-0 text-gray-500 group-hover:text-red-600 transition-colors">{item.icon}</span>
+          <span className="flex-1">{isLoggingOut ? 'Signing out...' : item.label}</span>
         </button>
       ) : (
-                        <Link
-                          href={item.href}
-                          className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition
-                            hover:bg-primary/5 dark:hover:bg-neutral-800
-                            ${pathname.startsWith(item.href) ? 'bg-primary/10 text-primary font-semibold' : ''}`}>
-                          <span className="w-5 h-5">{item.icon}</span>
-                          <span>{item.label}</span>
-                        </Link>
+                                <Link
+                                  href={item.href}
+                                  className={`group flex items-center gap-2 sm:gap-3 rounded-lg px-2 sm:px-3 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition-all duration-300
+                                    hover:bg-primary/10 hover:text-primary hover:shadow-md hover:translate-x-1
+                                    ${pathname.startsWith(item.href) ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary font-semibold shadow-md border-l-4 border-primary' : 'text-gray-700'}`}>
+                                  <span className={`flex-shrink-0 transition-all duration-300 ${pathname.startsWith(item.href) ? 'text-primary scale-110' : 'text-gray-500 group-hover:text-primary group-hover:scale-110'}`}>{item.icon}</span>
+                                  <span className="flex-1 truncate">{item.label}</span>
+                                </Link>
                       )}
                     </li>
                   ))}
               </ul>
             </div>
-          ))}
+            )
+          })}
         </nav>
-        <div className="p-4 mt-auto flex items-center gap-2 border-t">
-          <div className="rounded-full h-8 w-8 bg-primary/20 flex items-center justify-center text-base font-bold">
+        <div className="p-4 mt-auto flex items-center gap-3 border-t-2 border-gray-200 bg-gradient-to-r from-white to-gray-50/50">
+          <div className="rounded-full h-11 w-11 bg-gradient-to-br from-primary to-primary-600 flex items-center justify-center text-sm font-bold text-white shadow-lg ring-2 ring-primary/20 transition-transform duration-300 hover:scale-110">
             {profile?.first_name?.[0] ?? '?'}
           </div>
-          <div>
-            <div className="text-xs font-semibold">{profile?.first_name} {profile?.last_name}</div>
-            <div className="text-xs text-gray-500 capitalize">{role}</div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-gray-900 truncate">{profile?.first_name} {profile?.last_name}</div>
+            <div className="text-xs text-gray-500 capitalize font-medium">{role?.replace(/_/g, ' ')}</div>
           </div>
         </div>
       </aside>

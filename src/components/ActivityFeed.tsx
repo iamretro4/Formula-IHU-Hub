@@ -42,13 +42,19 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
 
   const getActivityColor = (role: string) => {
     switch (role) {
-      case 'ADMIN':
+      case 'admin':
         return 'text-purple-600 bg-purple-100'
-      case 'JUDGE':
+      case 'bp_judge':
+      case 'cm_judge':
+      case 'design_judge_software':
+      case 'design_judge_mechanical':
+      case 'design_judge_electronics':
+      case 'design_judge_overall':
         return 'text-blue-600 bg-blue-100'
-      case 'SCRUTINEER':
+      case 'scrutineer':
         return 'text-green-600 bg-green-100'
-      case 'TEAM_USER':
+      case 'team_leader':
+      case 'team_member':
         return 'text-orange-600 bg-orange-100'
       default:
         return 'text-gray-600 bg-gray-100'

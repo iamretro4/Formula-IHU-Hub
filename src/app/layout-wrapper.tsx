@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import Sidebar from '@/components/Sidebar'
 import { Topbar } from '@/components/Topbar'
+import { logger } from '@/lib/utils/logger'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -22,7 +23,7 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   // Debug logging to help diagnose
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      console.log('[LayoutWrapper]', {
+      logger.debug('[LayoutWrapper]', {
         pathname,
         hasUser: !!user,
         userId: user?.id,
@@ -37,25 +38,29 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  // Show loading spinner while checking auth on protected routes
+  // Show loading spinner while AuthContext is loading
+  // Don't show loading if we've already checked and there's no user
   if (loading) {
     return <LoadingSpinner fullScreen text="Loading..." />
   }
 
-  // Show layout with sidebar and topbar for authenticated users
-  if (user) {
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <Topbar />
-          <main className="flex-1 overflow-auto">{children}</main>
-        </div>
-      </div>
-    )
+  // Only show layout if we have a user from AuthContext
+  // Don't rely on session check alone - we need the actual user object
+  if (!user) {
+    // No user - show children (which will handle redirect)
+    // This prevents showing dashboard without authentication
+    return <>{children}</>
   }
 
-  // Redirect to signin if not authenticated (handled by middleware or page-level redirects)
-  return <>{children}</>
+  // Show layout with sidebar and topbar for authenticated users
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Topbar />
+        <main className="flex-1 overflow-auto">{children}</main>
+      </div>
+    </div>
+  )
 }
 

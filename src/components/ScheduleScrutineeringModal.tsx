@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
 import { Modal } from './Modal'
 import { scrutineeringSchema, ScrutineeringInput } from '@/lib/validators'
+import { logger } from '@/lib/utils/logger'
 
 interface ScheduleScrutineeringModalProps {
   isOpen: boolean
@@ -66,7 +67,7 @@ export function ScheduleScrutineeringModal({ isOpen, onClose }: ScheduleScrutine
         setScrutineers(scrutineersData)
       }
     } catch (error) {
-      console.error('Failed to load data:', error)
+      logger.error('Failed to load data', error, { context: 'schedule_scrutineering_modal' })
     }
   }
 

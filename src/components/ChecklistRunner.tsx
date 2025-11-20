@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import getSupabaseClient from '@/lib/supabase/client'
 import { useInspectionStatus } from '@/hooks/useInspectionStatus'
 import { useChecklistManager } from '@/hooks/useChecklistManager'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Loader2, CheckCircle, Clock, AlertCircle, MessageSquare } from 'lucide-react'
+import { logger } from '@/lib/utils/logger'
 
 interface ChecklistRunnerProps {
   bookingId: string
@@ -28,7 +29,7 @@ type User = {
 
 export default function ChecklistRunner({ bookingId, inspectionTypeId }: ChecklistRunnerProps) {
   const router = useRouter()
-  const supabase = createClientComponentClient()
+  const supabase = getSupabaseClient()
   const [user, setUser] = useState<User | null>(null)
   const [commentingItemId, setCommentingItemId] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState('')
@@ -128,7 +129,7 @@ export default function ChecklistRunner({ bookingId, inspectionTypeId }: Checkli
         router.push('/scrutineering/live')
       }
     } catch (err) {
-      console.error('Failed to submit inspection:', err)
+      logger.error('Failed to submit inspection', err, { context: 'submit_inspection', bookingId })
       alert('Failed to submit inspection. Please try again.')
     } finally {
       setIsSubmitting(false)
@@ -231,7 +232,7 @@ export default function ChecklistRunner({ bookingId, inspectionTypeId }: Checkli
                     </Button>
                     {item.comment && (
                       <span className="text-xs text-muted-foreground">
-                        "{item.comment}"
+                        &ldquo;{item.comment}&rdquo;
                       </span>
                     )}
                   </div>

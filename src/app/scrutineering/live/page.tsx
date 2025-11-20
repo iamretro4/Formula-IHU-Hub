@@ -1,11 +1,31 @@
 'use client'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
-import { Database } from '@/lib/types/database'
-import { Loader2 } from 'lucide-react'
-import { FaPlay, FaFilePdf, FaUndo } from 'react-icons/fa'
+import getSupabaseClient from '@/lib/supabase/client'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { 
+  Loader2, 
+  Play, 
+  FileText, 
+  RotateCcw, 
+  Clock, 
+  CheckCircle2, 
+  XCircle, 
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  Calendar,
+  Users,
+  Zap,
+  Wrench,
+  Battery
+} from 'lucide-react'
 import { jsPDF } from 'jspdf'
+import { logger } from '@/lib/utils/logger'
+import toast from 'react-hot-toast'
 
 const QUEUE_TABS = ['upcoming', 'ongoing', 'completed']
 
@@ -59,20 +79,24 @@ export default function InspectionQueuePage() {
   const [today, setToday] = useState('')
   const [tab, setTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [reinspectLoading, setReinspectLoading] = useState<string | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
-  const supabase = useMemo(() => createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ), [])
+  const supabase = useMemo(() => getSupabaseClient(), [])
+
+  const TYPE_ICONS: Record<string, React.ReactNode> = {
+    Electrical: <Zap className="w-4 h-4" />,
+    Mechanical: <Wrench className="w-4 h-4" />,
+    Accumulator: <Battery className="w-4 h-4" />,
+  }
 
   useEffect(() => { setToday(new Date().toISOString().split('T')[0]) }, [])
 
   // Listen for auth state changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Queue] Auth state changed:', event)
+      logger.debug('[Queue] Auth state changed', { event })
       if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
         // Reload user profile when auth state changes
         try {
@@ -88,14 +112,14 @@ export default function InspectionQueuePage() {
             .select('app_role, team_id')
             .eq('id', user.id).single()
           if (profileError || !profile) {
-            console.error('[Queue] Profile error after auth change:', profileError)
+            logger.error('[Queue] Profile error after auth change', profileError, { context: 'auth_state_change' })
             return
           }
           setRole(profile.app_role || '')
           setTeamId(profile.team_id || null)
           setAuthError(null)
         } catch (err) {
-          console.error('[Queue] Error handling auth state change:', err)
+          logger.error('[Queue] Error handling auth state change', err, { context: 'auth_state_change' })
         }
       }
     })
@@ -111,7 +135,7 @@ export default function InspectionQueuePage() {
       try {
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         if (userError) {
-          console.error('[Queue] Auth error:', userError)
+          logger.error('[Queue] Auth error', userError, { context: 'load_user' })
           if (userError.message?.includes('JWT') || userError.message?.includes('token') || userError.message?.includes('expired')) {
             setAuthError('Session expired. Please sign in again.')
           }
@@ -127,7 +151,7 @@ export default function InspectionQueuePage() {
           .select('app_role, team_id')
           .eq('id', user.id).single()
         if (profileError) {
-          console.error('[Queue] Profile error:', profileError)
+          logger.error('[Queue] Profile error', profileError, { context: 'load_user' })
           // Check if it's an auth error
           if (profileError.code === 'PGRST301' || profileError.message?.includes('JWT') || profileError.message?.includes('token')) {
             setAuthError('Session expired. Please sign in again.')
@@ -140,7 +164,7 @@ export default function InspectionQueuePage() {
           setTeamId(profile.team_id || null)
         }
       } catch (err) {
-        console.error('[Queue] Unexpected error loading user:', err)
+        logger.error('[Queue] Unexpected error loading user', err, { context: 'load_user' })
         setAuthError('Failed to load user data. Please refresh the page.')
       }
     })()
@@ -179,7 +203,7 @@ export default function InspectionQueuePage() {
         if (cancelled) return
         
         if (error) {
-          console.error('[Queue] Error fetching bookings:', error)
+          logger.error('[Queue] Error fetching bookings', error, { context: 'load_queue' })
           // Check if it's an auth error
           if (error.code === 'PGRST301' || error.message?.includes('JWT') || error.message?.includes('token') || error.message?.includes('expired') || error.code === '42501') {
             setAuthError('Session expired. Please sign in again.')
@@ -188,12 +212,19 @@ export default function InspectionQueuePage() {
               clearInterval(intervalRef.current)
               intervalRef.current = null
             }
+          } else {
+            setError(error.message || 'Failed to load inspections')
           }
           if (!cancelled) {
             setBookings([])
             setLoading(false)
           }
           return
+        }
+        
+        // Clear error on successful load
+        if (!cancelled) {
+          setError(null)
         }
         
         if (data) {
@@ -210,7 +241,7 @@ export default function InspectionQueuePage() {
             if (cancelled) return
             
             if (resultsError) {
-              console.error('[Queue] Error fetching inspection results:', resultsError)
+              logger.error('[Queue] Error fetching inspection results', resultsError, { context: 'load_queue', bookingIds })
               // Check if it's an auth error
               if (resultsError.code === 'PGRST301' || resultsError.message?.includes('JWT') || resultsError.message?.includes('token') || resultsError.message?.includes('expired') || resultsError.code === '42501') {
                 setAuthError('Session expired. Please sign in again.')
@@ -242,11 +273,11 @@ export default function InspectionQueuePage() {
             // Debug: log inspection results structure for completed bookings
             const completed = bookingsWithResults.filter((b: any) => b.status === 'completed')
             if (completed.length > 0) {
-              console.log('[Queue] Completed bookings:', completed.length)
+              logger.debug('[Queue] Completed bookings', { count: completed.length })
               completed.forEach((b: any) => {
                 const results = b.inspection_results
                 const firstResult = Array.isArray(results) && results.length > 0 ? results[0] : null
-                console.log('[Queue] Booking details:', {
+                logger.debug('[Queue] Booking details', {
                   id: b.id,
                   bookingStatus: b.status,
                   hasInspectionResults: !!results,
@@ -257,7 +288,7 @@ export default function InspectionQueuePage() {
                   firstResultKeys: firstResult ? Object.keys(firstResult) : []
                 })
                 // Also log the raw inspection_results to see everything
-                console.log('[Queue] Raw inspection_results:', JSON.stringify(results, null, 2))
+                logger.debug('[Queue] Raw inspection_results', { results: JSON.stringify(results, null, 2) })
               })
             }
           }
@@ -267,7 +298,7 @@ export default function InspectionQueuePage() {
           }
         }
       } catch (err) {
-        console.error('[Queue] Unexpected error:', err)
+        logger.error('[Queue] Unexpected error', err, { context: 'load_queue' })
         if (!cancelled) {
           setBookings([])
         }
@@ -310,7 +341,7 @@ export default function InspectionQueuePage() {
     const result = b.inspection_results?.[0]
     const isPassed = result?.status === 'passed'
     if (completedBookings.length > 0 && !isPassed) {
-      console.log('[Queue] Not passed - booking:', b.id, 'result:', result, 'status:', result?.status)
+      logger.debug('[Queue] Not passed', { bookingId: b.id, result, status: result?.status })
     }
     return isPassed
   }).length
@@ -318,196 +349,377 @@ export default function InspectionQueuePage() {
     const result = b.inspection_results?.[0]
     const isFailed = result?.status === 'failed'
     if (completedBookings.length > 0 && !isFailed) {
-      console.log('[Queue] Not failed - booking:', b.id, 'result:', result, 'status:', result?.status)
+      logger.debug('[Queue] Not failed', { bookingId: b.id, result, status: result?.status })
     }
     return isFailed
   }).length
   
   // Debug: log counts
   if (completedBookings.length > 0) {
-    console.log('[Queue] Counts - completed:', completedBookings.length, 'passed:', passedCount, 'failed:', failedCount)
+    logger.debug('[Queue] Counts', { completed: completedBookings.length, passed: passedCount, failed: failedCount })
   }
 
 
   // Export PDF (existing logic)
   async function exportInspectionPDF(bookingId: string) {
-    const { data: bookingData } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        inspection_types(name),
-        teams(name, code),
-        inspection_results(status, completed_at, scrutineer_ids)
-      `)
-      .eq('id', bookingId)
-      .single()
-    if (!bookingData) return alert("Booking not found.")
-    const typedBooking = bookingData as unknown as Booking
-    const { data: progress } = await supabase
-      .from('inspection_progress')
-      .select('*, user_profiles(first_name, last_name)')
-      .eq('booking_id', bookingId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const doc = new (jsPDF as any)()
-    doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? 'N/A'}`, 10, 10)
-    doc.text(`Team: ${typedBooking.teams?.name ?? 'N/A'} (${typedBooking.teams?.code ?? '-'})`, 10, 20)
-    doc.text(`Slot: ${typedBooking.start_time} - ${typedBooking.end_time}`, 10, 30)
-    doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status ?? '-'}`, 10, 40)
-    doc.text(`Checklist:`, 10, 50)
-    
-    ((progress ?? []) as unknown as InspectionProgress[]).forEach((p: InspectionProgress, i: number) => {
-      const inspectorName = p.user_profiles 
-        ? `${p.user_profiles.first_name ?? ''} ${p.user_profiles.last_name ?? ''}`.trim() 
-        : p.user_id ?? 'Unknown'
-      doc.text(
-        `${i + 1}. ${p.item_id} Status: ${p.status ?? '-'} By: ${inspectorName}`,
-        10, 60 + i * 7)
-    })
-    doc.save(`${typedBooking.teams?.name ?? 'Team'}_${typedBooking.inspection_types?.name ?? 'Inspection'}_${typedBooking.start_time}.pdf`)
+    try {
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          inspection_types(name),
+          teams(name, code),
+          inspection_results(status, completed_at, scrutineer_ids)
+        `)
+        .eq('id', bookingId)
+        .single()
+      
+      if (bookingError || !bookingData) {
+        throw new Error(bookingError?.message || 'Booking not found')
+      }
+      
+      const typedBooking = bookingData as unknown as Booking
+      const { data: progress, error: progressError } = await supabase
+        .from('inspection_progress')
+        .select('*, user_profiles(first_name, last_name)')
+        .eq('booking_id', bookingId)
+      
+      if (progressError) {
+        logger.error('[Queue] Error fetching progress for PDF', progressError, { context: 'export_pdf', bookingId })
+      }
+      
+      const doc = new jsPDF()
+      doc.setFontSize(18)
+      doc.text(`Inspection Report`, 10, 10)
+      doc.setFontSize(12)
+      doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? 'N/A'}`, 10, 20)
+      doc.text(`Team: ${typedBooking.teams?.name ?? 'N/A'} (${typedBooking.teams?.code ?? '-'})`, 10, 27)
+      doc.text(`Slot: ${typedBooking.start_time} - ${typedBooking.end_time}`, 10, 34)
+      doc.text(`Date: ${typedBooking.date}`, 10, 41)
+      doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status ?? '-'}`, 10, 48)
+      doc.text(`Checklist Items:`, 10, 58)
+      
+      let yPos = 65;
+      ((progress ?? []) as unknown as InspectionProgress[]).forEach((p: InspectionProgress, i) => {
+        const inspectorName = p.user_profiles 
+          ? `${p.user_profiles.first_name ?? ''} ${p.user_profiles.last_name ?? ''}`.trim() 
+          : p.user_id ?? 'Unknown'
+        doc.text(
+          `${i + 1}. ${p.item_id} - Status: ${p.status ?? '-'} - By: ${inspectorName}`,
+          10, yPos)
+        yPos += 7
+        if (yPos > 280) {
+          doc.addPage()
+          yPos = 20
+        }
+      })
+      
+      const fileName = `${typedBooking.teams?.name ?? 'Team'}_${typedBooking.inspection_types?.name ?? 'Inspection'}_${typedBooking.start_time}.pdf`
+      doc.save(fileName)
+      toast.success('PDF exported successfully')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to export PDF'
+      toast.error(errorMessage)
+      logger.error('[Queue] Error exporting PDF', err, { context: 'export_pdf', bookingId })
+    }
   }
 
   // Reinspect logic
   async function handleReinspect(bookingId: string) {
+    if (!confirm('Are you sure you want to reset this inspection? This will mark it as failed and allow the team to re-book.')) {
+      return
+    }
+    
     setReinspectLoading(bookingId)
-    await supabase
-      .from('inspection_results')
-      .update({ status: 'failed', completed_at: null } as any)
-      .eq('booking_id', bookingId)
-    await supabase
-      .from('inspection_progress')
-      .update({ status: 'failed', comment: null, locked: false } as any)
-      .eq('booking_id', bookingId)
-    setReinspectLoading(null)
+    try {
+      const { error: resultError } = await supabase
+        .from('inspection_results')
+        .update({ status: 'failed', completed_at: null } as any)
+        .eq('booking_id', bookingId)
+      
+      if (resultError) throw resultError
+      
+      const { error: progressError } = await supabase
+        .from('inspection_progress')
+        .update({ status: 'failed', comment: null, locked: false } as any)
+        .eq('booking_id', bookingId)
+      
+      if (progressError) throw progressError
+      
+      toast.success('Inspection reset successfully')
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to reset inspection'
+      toast.error(errorMessage)
+      logger.error('[Queue] Error resetting inspection', err, { context: 'reinspect', bookingId })
+    } finally {
+      setReinspectLoading(null)
+    }
   }
 
   return (
-    <div className="max-w-xl mx-auto p-8">
-      <h1 className="text-2xl font-black mb-1">Live Inspections Queue</h1>
-      <p className="text-gray-500 mb-5">View and manage today's inspections.</p>
-      <div className="flex bg-neutral-100 rounded overflow-hidden max-w-md mx-auto text-sm font-semibold mb-6">
-        {QUEUE_TABS.map(t =>
-          <button
-            key={t}
-            onClick={() => setTab(t as typeof tab)}
-            className={`w-1/3 transition py-2 ${tab === t ? 'bg-white' : 'text-gray-500'}`}
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 animate-fade-in min-h-screen">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+            <Play className="w-8 h-8 text-primary" />
+            Live Inspections Queue
+          </h1>
+          <div className="mt-2 flex items-center gap-2 text-gray-600">
+            <Calendar className="w-4 h-4" />
+            <p className="text-base font-medium">
+              Today: <span className="font-semibold text-primary">{today}</span>
+            </p>
+          </div>
+        </div>
+        {error && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setError(null)
+              window.location.reload()
+            }}
+            className="gap-2"
           >
-            {t[0].toUpperCase() + t.slice(1)} ({byStatus(t).length})
-          </button>
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </Button>
         )}
       </div>
-      {tab === 'completed' && (
-        <div className="flex gap-4 mb-2">
-          <span className="px-3 py-1 bg-green-50 border-green-200 border text-green-800 font-semibold rounded-full">
-            Passed: {passedCount}
-          </span>
-          <span className="px-3 py-1 bg-red-50 border-red-200 border text-red-800 font-semibold rounded-full">
-            Failed: {failedCount}
-          </span>
-        </div>
-      )}
+
+      {/* Error States */}
       {authError && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800 font-semibold mb-2">{authError}</p>
-          <Link
-            href="/auth/signin"
-            className="inline-block px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-semibold transition"
-          >
-            Sign In Again
-          </Link>
-        </div>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <div className="flex-1">
+                <p className="font-semibold">Authentication Error</p>
+                <p className="text-sm text-red-600 mt-1">{authError}</p>
+              </div>
+              <Link href="/auth/signin">
+                <Button variant="destructive" className="gap-2">
+                  Sign In Again
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
       )}
-      <div>
-        {loading ? (
-          <div className="flex justify-center p-5"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading...</div>
-        ) : byStatus(tab).length === 0 ? (
-          <div className="rounded border p-8 text-center bg-white text-gray-500">No {tab} inspections for today.</div>
-        ) : (
-          <div className="space-y-3">
-            {byStatus(tab).map(b => (
-              <div key={b.id} className="border rounded-lg px-5 py-4 bg-white shadow flex items-center justify-between">
-                <div>
-                  <div className="font-bold">{b.inspection_types?.name ?? "Inspection"}</div>
-                  <div className="text-xs text-gray-500">{b.teams?.name ?? "Team"}</div>
-                  <div className="text-xs">
-                    Slot: {b.start_time}
-                    {b.status === 'ongoing' &&
-                      <span className="ml-2 px-2 bg-yellow-100 text-yellow-800 rounded-full border border-yellow-300">Ongoing</span>
-                    }
-                    {tab === 'completed' && (
-                      <span className="ml-2 px-2 py-0.5 rounded-full border font-bold"
-                        style={{
-                          background: b.inspection_results?.[0]?.status === 'passed' ? '#e6fff2' : b.inspection_results?.[0]?.status === 'failed' ? '#ffebee' : '#eee',
-                          color: b.inspection_results?.[0]?.status === 'passed' ? '#0f5132' : b.inspection_results?.[0]?.status === 'failed' ? '#b71c1c' : '#555',
-                          borderColor: b.inspection_results?.[0]?.status === 'passed' ? '#0f5132' : b.inspection_results?.[0]?.status === 'failed' ? '#b71c1c' : '#555',
-                        }}>
-                        {b.inspection_results?.[0]?.status === 'passed'
-                          ? 'Passed'
-                          : b.inspection_results?.[0]?.status === 'failed'
-                          ? 'Failed'
-                          : b.inspection_results?.[0]?.status ?? ''}
-                      </span>
-                    )}
+
+      {error && !authError && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <div>
+                <p className="font-semibold">Error loading inspections</p>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats and Tabs */}
+      <Card className="shadow-lg border-gray-200">
+        <CardContent className="pt-6">
+          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
+            <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100/50">
+              {QUEUE_TABS.map(t => (
+                <TabsTrigger 
+                  key={t} 
+                  value={t}
+                  className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white"
+                >
+                  {t === 'upcoming' && <Clock className="w-4 h-4" />}
+                  {t === 'ongoing' && <Play className="w-4 h-4" />}
+                  {t === 'completed' && <CheckCircle2 className="w-4 h-4" />}
+                  <span className="capitalize">{t}</span>
+                  <Badge variant="outline" className="ml-1">
+                    {byStatus(t).length}
+                  </Badge>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            
+            {tab === 'completed' && (
+              <div className="flex gap-4 mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-lg border border-gray-200">
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-2 border-green-300 rounded-lg">
+                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+                  <div>
+                    <div className="text-xs text-green-600 font-medium">Passed</div>
+                    <div className="text-xl font-bold text-green-800">{passedCount}</div>
                   </div>
                 </div>
-                <div className="ml-3 flex flex-col items-end gap-2">
-                  {tab === 'upcoming' && (role === 'scrutineer' || role === 'admin' || role === 'judge') && (
-                    <Link
-                      href={`/scrutineering/live/${b.id}`}
-                      className="inline-flex items-center gap-1 bg-black hover:bg-gray-800 text-white px-4 py-2 rounded font-semibold shadow text-sm transition"
-                    >
-                      <FaPlay className="mr-1" /> Start
-                    </Link>
-                  )}
-                  {tab === 'ongoing' && (
-                    <Link
-                      href={`/scrutineering/live/${b.id}`}
-                      className={`inline-flex items-center gap-1 px-4 py-2 rounded font-semibold shadow text-sm transition
-                        ${role === 'scrutineer' || role === 'admin' || role === 'judge'
-                          ? 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                          : 'bg-yellow-100 text-yellow-800 pointer-events-none border cursor-default'
-                        }`}
-                    >
-                      <FaPlay className="mr-1" /> Ongoing
-                    </Link>
-                  )}
-                  {tab === 'completed' && (
-                    <div className="flex gap-2 items-center">
-                      <Link
-                        href={`/scrutineering/live/${b.id}`}
-                        className="inline-flex items-center gap-1 bg-blue-900 hover:bg-blue-700 text-white px-3 py-2 rounded font-semibold shadow text-sm transition"
-                      >
-                        Review
-                      </Link>
-                      {(role === 'scrutineer' || role === 'admin' || role === 'judge') && (
-                        <button
-                          className="text-red-600 hover:text-red-900 ml-2 flex items-center gap-1"
-                          onClick={() => exportInspectionPDF(b.id)}
-                          title="Export as PDF"
-                        >
-                          <FaFilePdf className="mr-1" /> PDF
-                        </button>
-                      )}
-                      {b.inspection_results?.[0]?.status === 'passed' && (role === 'scrutineer' || role === 'admin') && (
-                        <button
-                          className="ml-2 text-orange-700 hover:text-orange-900 flex items-center gap-1 border border-orange-300 rounded px-3 py-1 text-sm font-bold shadow"
-                          disabled={reinspectLoading === b.id}
-                          onClick={() => handleReinspect(b.id)}
-                          title="Reset this inspection so the team must re-do all points"
-                        >
-                          {reinspectLoading === b.id
-                            ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                            : <FaUndo className="mr-1" />}
-                          Re-inspect
-                        </button>
-                      )}
-                    </div>
-                  )}
+                <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-2 border-red-300 rounded-lg">
+                  <XCircle className="w-5 h-5 text-red-600" />
+                  <div>
+                    <div className="text-xs text-red-600 font-medium">Failed</div>
+                    <div className="text-xl font-bold text-red-800">{failedCount}</div>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            )}
+            <TabsContent value={tab} className="space-y-4">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+                  <p className="text-gray-600 font-medium">Loading inspections...</p>
+                </div>
+              ) : byStatus(tab).length === 0 ? (
+                <div className="rounded-lg border-2 border-dashed border-gray-200 p-12 text-center bg-gray-50">
+                  <div className="flex justify-center mb-3">
+                    {tab === 'upcoming' && <Clock className="w-12 h-12 text-gray-300" />}
+                    {tab === 'ongoing' && <Play className="w-12 h-12 text-gray-300" />}
+                    {tab === 'completed' && <CheckCircle2 className="w-12 h-12 text-gray-300" />}
+                  </div>
+                  <p className="text-gray-500 font-medium">No {tab} inspections for today</p>
+                  <p className="text-sm text-gray-400 mt-1">Check back later or view other tabs</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {byStatus(tab).map(b => {
+                    const inspectionTypeName = b.inspection_types?.name ?? "Inspection"
+                    const resultStatus = b.inspection_results?.[0]?.status
+                    const canManage = role === 'scrutineer' || role === 'admin' || role === 'judge'
+                    
+                    return (
+                      <Card 
+                        key={b.id} 
+                        className={`shadow-md hover:shadow-lg transition-all duration-200 ${
+                          b.status === 'ongoing' ? 'border-yellow-300 bg-yellow-50/30' :
+                          resultStatus === 'passed' ? 'border-green-300 bg-green-50/30' :
+                          resultStatus === 'failed' ? 'border-red-300 bg-red-50/30' :
+                          'border-gray-200'
+                        }`}
+                      >
+                        <CardContent className="pt-6">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                {TYPE_ICONS[inspectionTypeName]}
+                                <h3 className="font-bold text-lg text-gray-900">{inspectionTypeName}</h3>
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Users className="w-4 h-4" />
+                                  <span className="font-semibold">{b.teams?.name ?? "Team"}</span>
+                                  {b.teams?.code && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {b.teams.code}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <Clock className="w-4 h-4" />
+                                  <span>{b.start_time} - {b.end_time}</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    Lane {b.resource_index}
+                                  </Badge>
+                                </div>
+                                {b.status === 'ongoing' && (
+                                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                    <Play className="w-3 h-3 mr-1" />
+                                    Ongoing
+                                  </Badge>
+                                )}
+                                {tab === 'completed' && resultStatus && (
+                                  <Badge 
+                                    className={
+                                      resultStatus === 'passed' 
+                                        ? 'bg-green-100 text-green-800 border-green-300' 
+                                        : resultStatus === 'failed'
+                                        ? 'bg-red-100 text-red-800 border-red-300'
+                                        : 'bg-gray-100 text-gray-800 border-gray-300'
+                                    }
+                                  >
+                                    {resultStatus === 'passed' ? (
+                                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                                    ) : resultStatus === 'failed' ? (
+                                      <XCircle className="w-3 h-3 mr-1" />
+                                    ) : null}
+                                    {resultStatus === 'passed' ? 'Passed' : resultStatus === 'failed' ? 'Failed' : resultStatus}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              {tab === 'upcoming' && canManage && (
+                                <Link href={`/scrutineering/live/${b.id}`}>
+                                  <Button className="gap-2 bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary">
+                                    <Play className="w-4 h-4" />
+                                    Start
+                                  </Button>
+                                </Link>
+                              )}
+                              {tab === 'ongoing' && (
+                                <Link href={`/scrutineering/live/${b.id}`}>
+                                  <Button 
+                                    variant={canManage ? "default" : "outline"}
+                                    className={`gap-2 ${
+                                      canManage 
+                                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white' 
+                                        : 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                                    }`}
+                                    disabled={!canManage}
+                                  >
+                                    <Play className="w-4 h-4" />
+                                    {canManage ? 'Continue' : 'View'}
+                                  </Button>
+                                </Link>
+                              )}
+                              {tab === 'completed' && (
+                                <div className="flex flex-col gap-2">
+                                  <Link href={`/scrutineering/live/${b.id}`}>
+                                    <Button variant="outline" className="gap-2 w-full">
+                                      <Eye className="w-4 h-4" />
+                                      Review
+                                    </Button>
+                                  </Link>
+                                  {canManage && (
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => exportInspectionPDF(b.id)}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        title="Export as PDF"
+                                      >
+                                        <FileText className="w-4 h-4" />
+                                      </Button>
+                                      {resultStatus === 'passed' && role !== 'judge' && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          disabled={reinspectLoading === b.id}
+                                          onClick={() => handleReinspect(b.id)}
+                                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                          title="Reset this inspection"
+                                        >
+                                          {reinspectLoading === b.id ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                          ) : (
+                                            <RotateCcw className="w-4 h-4" />
+                                          )}
+                                        </Button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
     </div>
   )
 }

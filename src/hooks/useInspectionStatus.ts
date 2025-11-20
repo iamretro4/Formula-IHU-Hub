@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import getSupabaseClient from '@/lib/supabase/client'
 import { Database } from '@/lib/types/database'
 
 type BookingStatus = Database['public']['Tables']['bookings']['Row']['status']
@@ -30,7 +30,7 @@ export function useInspectionStatus({
   const [error, setError] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseClient()
   const retryCountRef = useRef(0)
   const maxRetries = 3
   const retryDelay = 1000 // 1 second

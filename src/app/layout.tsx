@@ -4,6 +4,7 @@ import './globals.css'
 import { Providers } from './providers'
 import { LayoutWrapper } from './layout-wrapper'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { SupabaseDebugger } from '@/components/SupabaseDebugger'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ErrorBoundary>
           <Providers>
             <LayoutWrapper>{children}</LayoutWrapper>
+            <SupabaseDebugger />
           </Providers>
         </ErrorBoundary>
       </body>

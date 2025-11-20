@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import getSupabaseClient from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, Download } from 'lucide-react'
@@ -20,7 +20,7 @@ type Result = {
 }
 
 export default function EngineeringDesignResultsPage() {
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseClient()
   const [loading, setLoading] = useState(true)
   const [results, setResults] = useState<Result[]>([])
 

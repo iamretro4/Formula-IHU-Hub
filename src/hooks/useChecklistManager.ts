@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import getSupabaseClient from '@/lib/supabase/client'
 import { Database } from '@/lib/types/database'
 
 type ChecklistTemplate = Database['public']['Tables']['checklist_templates']['Row']
@@ -44,7 +44,7 @@ export function useChecklistManager({
   const [error, setError] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   
-  const supabase = createClientComponentClient<Database>()
+  const supabase = getSupabaseClient()
   const pendingUpdatesRef = useRef<Map<string, { checked: boolean; comment: string }>>(new Map())
   const retryCountRef = useRef(0)
   const maxRetries = 3

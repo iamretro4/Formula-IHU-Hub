@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Handle CORS for API routes
   const origin = request.headers.get('origin')
   const allowedOrigins = [
@@ -72,7 +72,8 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/auth')
   const isProtectedRoute = !isAuthRoute && pathname !== '/' && !pathname.startsWith('/api')
 
-  // For auth routes, use getUser() to validate token with server
+  // For auth routes, check if user is authenticated
+  // Use getUser() directly to validate token with server
   if (isAuthRoute) {
     try {
       // Use getUser() which validates the token with Supabase Auth server
@@ -84,19 +85,8 @@ export async function middleware(request: NextRequest) {
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)
       }
-      // If there's an error or no user, clear cookies and allow access
-      if (error || !user) {
-        // Clear any invalid cookies that might cause issues
-        response.cookies.delete('sb-access-token')
-        response.cookies.delete('sb-refresh-token')
-        // Also try to clear Supabase auth cookies
-        const allCookies = request.cookies.getAll()
-        allCookies.forEach((cookie) => {
-          if (cookie.name.includes('sb-') || cookie.name.includes('supabase')) {
-            response.cookies.delete(cookie.name)
-          }
-        })
-      }
+      
+      // If there's no user or error, allow access to auth routes
     } catch (err) {
       // On any error, allow access to auth routes
       console.warn('Middleware auth check error:', err)

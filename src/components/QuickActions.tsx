@@ -7,7 +7,7 @@ import {
   TruckIcon,
   ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline'
-import { UserRole } from '@prisma/client'
+import { UserRole } from '@/lib/types/database'
 import { CreateTeamModal } from './CreateTeamModal'
 import { CreateVehicleModal } from './CreateVehicleModal'
 import { ScheduleScrutineeringModal } from './ScheduleScrutineeringModal'
@@ -27,7 +27,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       description: 'Register a new racing team',
       icon: UserGroupIcon,
       action: () => setShowCreateTeamModal(true),
-      roles: ['ADMIN', 'TEAM_USER'] as UserRole[],
+      roles: [UserRole.admin, UserRole.team_leader, UserRole.team_member] as UserRole[],
       color: 'text-blue-600 bg-blue-100',
     },
     {
@@ -35,7 +35,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       description: 'Register a new vehicle for scrutineering',
       icon: TruckIcon,
       action: () => setShowCreateVehicleModal(true),
-      roles: ['ADMIN', 'TEAM_USER'] as UserRole[],
+      roles: [UserRole.admin, UserRole.team_leader, UserRole.team_member] as UserRole[],
       color: 'text-green-600 bg-green-100',
     },
     {
@@ -43,7 +43,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
       description: 'Create a new scrutineering session',
       icon: ClipboardDocumentCheckIcon,
       action: () => setShowScheduleModal(true),
-      roles: ['ADMIN', 'SCRUTINEER'] as UserRole[],
+      roles: [UserRole.admin, UserRole.scrutineer] as UserRole[],
       color: 'text-indigo-600 bg-indigo-100',
     },
   ]
