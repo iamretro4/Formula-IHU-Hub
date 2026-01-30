@@ -13,7 +13,7 @@ import {
   EyeSlashIcon,
 } from '@heroicons/react/24/outline'
 import { Mail, Lock, LogIn, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
-import getSupabaseClient from '@/lib/supabase/client'
+import getSupabaseClient, { hasSupabaseEnv } from '@/lib/supabase/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
 
@@ -35,38 +35,29 @@ export default function SignInPage() {
 
   // Check if already authenticated and redirect - but only if session is truly valid
   useEffect(() => {
+    if (!hasSupabaseEnv()) return
     let mounted = true
-    
+
     const checkAuth = async () => {
       try {
         const supabase = getSupabaseClient()
-        // Use getUser() which validates the token with Supabase Auth server
-        // This ensures we only redirect if there's a truly valid authenticated user
         const { data: { user }, error } = await supabase.auth.getUser()
-        
-        // Only redirect if we have a valid user (token is valid) and no error
         if (mounted && user && !error) {
-          // User is actually authenticated, redirect
           window.location.assign('/dashboard')
         }
-        // Otherwise, stay on sign-in page
       } catch (err) {
-        // If there's an error checking auth, don't redirect - let user sign in
         console.warn('Auth check error:', err)
       }
     }
-    
-    // Delay to avoid race conditions and ensure page is mounted
+
     const timeoutId = setTimeout(() => {
       checkAuth()
     }, 300)
 
-    // Listen for auth state changes and redirect on sign in
     const supabase = getSupabaseClient()
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (mounted && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user && !redirectHandled.current) {
         redirectHandled.current = true
-        // Small delay to ensure cookies are set
         setTimeout(() => {
           window.location.assign('/dashboard')
         }, 100)
@@ -81,10 +72,15 @@ export default function SignInPage() {
   }, [router])
 
   const onSubmit = useCallback(async (data: SignInInput) => {
+    if (!hasSupabaseEnv()) {
+      setError('Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local and restart the dev server.')
+      toast.error('Missing Supabase environment variables.')
+      return
+    }
     setIsLoading(true)
     setError(null)
     redirectHandled.current = false
-    
+
     try {
       const supabase = getSupabaseClient()
       const { data: authData, error } = await supabase.auth.signInWithPassword({
@@ -127,7 +123,15 @@ export default function SignInPage() {
         }
       }, 1000)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
+      const rawMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
+      const isNetworkError =
+        rawMessage === 'Failed to fetch' ||
+        rawMessage.includes('NetworkError') ||
+        rawMessage.includes('network') ||
+        (err instanceof TypeError && rawMessage.includes('fetch'))
+      const errorMessage = isNetworkError
+        ? 'Cannot reach Supabase. 1) Restart the dev server (npm run dev) if you changed .env.local. 2) In Supabase Dashboard → Project Settings → General, ensure the project is not paused. 3) Check NEXT_PUBLIC_SUPABASE_URL has no typo or trailing slash.'
+        : rawMessage
       setError(errorMessage)
       toast.error(errorMessage)
       setIsLoading(false)
@@ -152,16 +156,17 @@ export default function SignInPage() {
       <div className="max-w-md w-full space-y-8 relative z-10 animate-fade-in">
         {/* Logo and Header */}
         <div className="text-center">
-          <div className="mx-auto w-24 h-24 bg-gradient-to-br from-primary via-primary/90 to-primary/80 rounded-2xl flex items-center justify-center shadow-2xl mb-6 ring-4 ring-primary/20 transform hover:scale-105 transition-transform duration-300">
+          <div className="mx-auto w-28 h-28 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-gray-100 mb-6 p-3 transform hover:scale-105 transition-transform duration-300">
             {logoError ? (
-              <ClipboardDocumentCheckIcon className="w-12 h-12 text-white" />
+              <ClipboardDocumentCheckIcon className="w-12 h-12 text-primary" />
             ) : (
               <Image
                 src="/formula-ihu-logo.png"
                 alt="Formula IHU"
-                width={56}
-                height={56}
-                className="w-14 h-14 object-contain"
+                width={88}
+                height={88}
+                className="w-full h-full object-contain"
+                quality={90}
                 priority
                 onError={() => setLogoError(true)}
               />
@@ -177,6 +182,14 @@ export default function SignInPage() {
 
         {/* Form Card */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 p-8 sm:p-10 hover:shadow-3xl transition-all duration-300">
+          {!hasSupabaseEnv() && (
+            <Alert variant="destructive" className="mb-6 animate-fade-in">
+              <AlertCircle className="w-4 h-4" />
+              <AlertDescription>
+                Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local, then restart the dev server (npm run dev).
+              </AlertDescription>
+            </Alert>
+          )}
           {error && (
             <Alert variant="destructive" className="mb-6 animate-fade-in">
               <AlertCircle className="w-4 h-4" />

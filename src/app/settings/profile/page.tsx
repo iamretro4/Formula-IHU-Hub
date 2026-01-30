@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Save, AlertCircle, User, Mail, Shield, Users, Phone, Heart, FileText, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
+import { Save, AlertCircle, User, Mail, Shield, Users, Phone, Heart, FileText, CheckCircle2, XCircle, Loader2, Building2, MapPin } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Database } from '@/lib/types/database'
 import { useAuth } from '@/hooks/useAuth'
@@ -40,6 +40,11 @@ export default function ProfilePage() {
     ehic_number: '',
     campsite_staying: false,
     team_id: '',
+    university_name: '',
+    faculty_advisor_name: '',
+    faculty_advisor_position: '',
+    billing_address: '',
+    vat_id: '',
   })
 
   const profileStats = useMemo(() => {
@@ -82,6 +87,11 @@ export default function ProfilePage() {
         ehic_number: authProfile.ehic_number || '',
         campsite_staying: authProfile.campsite_staying || false,
         team_id: authProfile.team_id ? String(authProfile.team_id) : '',
+        university_name: authProfile.university_name || '',
+        faculty_advisor_name: authProfile.faculty_advisor_name || '',
+        faculty_advisor_position: authProfile.faculty_advisor_position || '',
+        billing_address: authProfile.billing_address || '',
+        vat_id: authProfile.vat_id || '',
       })
     }
 
@@ -137,6 +147,11 @@ export default function ProfilePage() {
           ehic_number: formData.ehic_number || null,
           campsite_staying: formData.campsite_staying,
           team_id: (formData.team_id && formData.team_id !== "none" && formData.team_id !== "") ? formData.team_id : null,
+          university_name: formData.university_name || null,
+          faculty_advisor_name: formData.faculty_advisor_name || null,
+          faculty_advisor_position: formData.faculty_advisor_position || null,
+          billing_address: formData.billing_address || null,
+          vat_id: formData.vat_id || null,
           profile_completed: true,
         })
         .eq('id', user.id)
@@ -191,6 +206,11 @@ export default function ProfilePage() {
           ehic_number: updatedProfile.ehic_number || '',
           campsite_staying: updatedProfile.campsite_staying || false,
           team_id: newTeamId,
+          university_name: updatedProfile.university_name || '',
+          faculty_advisor_name: updatedProfile.faculty_advisor_name || '',
+          faculty_advisor_position: updatedProfile.faculty_advisor_position || '',
+          billing_address: updatedProfile.billing_address || '',
+          vat_id: updatedProfile.vat_id || '',
         })
         // Clear any errors
         setError(null)
@@ -468,6 +488,77 @@ export default function ProfilePage() {
                   placeholder="Enter your EHIC number"
                 />
                 <p className="text-xs text-gray-500 mt-1">European Health Insurance Card number</p>
+              </div>
+
+              {/* University & Billing */}
+              <div className="space-y-4 pt-2 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <Building2 className="w-4 h-4 text-primary" />
+                  University & Billing
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="university_name" className="text-sm font-semibold text-gray-700">
+                      University Name <span className="text-gray-500 text-xs">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="university_name"
+                      value={formData.university_name}
+                      onChange={(e) => setFormData({ ...formData, university_name: e.target.value })}
+                      className="h-11"
+                      placeholder="e.g. International Hellenic University"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="faculty_advisor_name" className="text-sm font-semibold text-gray-700">
+                      Faculty Advisor Name <span className="text-gray-500 text-xs">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="faculty_advisor_name"
+                      value={formData.faculty_advisor_name}
+                      onChange={(e) => setFormData({ ...formData, faculty_advisor_name: e.target.value })}
+                      className="h-11"
+                      placeholder="Advisor full name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="faculty_advisor_position" className="text-sm font-semibold text-gray-700">
+                      Faculty Advisor Position <span className="text-gray-500 text-xs">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="faculty_advisor_position"
+                      value={formData.faculty_advisor_position}
+                      onChange={(e) => setFormData({ ...formData, faculty_advisor_position: e.target.value })}
+                      className="h-11"
+                      placeholder="e.g. Professor, Department Head"
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="billing_address" className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-gray-500" />
+                      Billing Address <span className="text-gray-500 text-xs">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="billing_address"
+                      value={formData.billing_address}
+                      onChange={(e) => setFormData({ ...formData, billing_address: e.target.value })}
+                      className="h-11"
+                      placeholder="Street, city, postal code, country"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vat_id" className="text-sm font-semibold text-gray-700">
+                      VAT ID <span className="text-gray-500 text-xs">(Optional)</span>
+                    </Label>
+                    <Input
+                      id="vat_id"
+                      value={formData.vat_id}
+                      onChange={(e) => setFormData({ ...formData, vat_id: e.target.value })}
+                      className="h-11"
+                      placeholder="e.g. EL123456789"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Team Selection */}

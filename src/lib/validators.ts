@@ -12,6 +12,11 @@ export const signUpSchema = z.object({
   teamId: z.string().optional(), // Optional - can be assigned later by admin
   campsiteStaying: z.boolean().optional(), // match DB column default false
   teamLead: z.boolean().optional(),        // match DB column default false
+  universityName: z.string().optional(),
+  facultyAdvisorName: z.string().optional(),
+  facultyAdvisorPosition: z.string().optional(),
+  billingAddress: z.string().optional(),
+  vatId: z.string().optional(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {

@@ -106,9 +106,10 @@ export default function HomePage() {
               <Image
                 src="/formula-ihu-logo.png"
                 alt="Formula IHU"
-                width={120}
-                height={80}
+                width={240}
+                height={160}
                 className="h-20 w-auto mx-auto object-contain drop-shadow-lg"
+                quality={90}
                 priority
                 onError={() => setLogoError(true)}
               />

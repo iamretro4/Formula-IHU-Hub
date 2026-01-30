@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import getSupabaseClient, { ensureSupabaseConnection, refreshSupabaseSession } from '@/lib/supabase/client'
+import getSupabaseClient, { hasSupabaseEnv, ensureSupabaseConnection, refreshSupabaseSession } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { logger } from '@/lib/utils/logger'
 import { CheckCircle2, XCircle, RefreshCw, AlertTriangle, Copy, Trash2 } from 'lucide-react'
@@ -21,6 +21,13 @@ export function SupabaseDebugger() {
   const checkConnection = useCallback(async () => {
     setConnectionStatus('checking')
     setErrorInfo(null)
+    
+    if (!hasSupabaseEnv()) {
+      setConnectionStatus('error')
+      setErrorInfo('Missing Supabase environment variables')
+      setSessionInfo(null)
+      return
+    }
     
     try {
       const supabase = getSupabaseClient()
@@ -92,6 +99,10 @@ export function SupabaseDebugger() {
   }, [profile])
 
   const handleRefreshSession = async () => {
+    if (!hasSupabaseEnv()) {
+      toast.error('Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local')
+      return
+    }
     try {
       const refreshed = await refreshSupabaseSession()
       if (refreshed) {

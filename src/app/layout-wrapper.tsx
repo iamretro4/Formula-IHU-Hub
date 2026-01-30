@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { useMemo, useEffect } from 'react'
+import { useMemo, useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import Sidebar from '@/components/Sidebar'
@@ -10,6 +10,7 @@ import { logger } from '@/lib/utils/logger'
 
 export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   // Always call hooks unconditionally (React rules)
   const { user, loading, error } = useAuth()
   
@@ -55,9 +56,9 @@ export function LayoutWrapper({ children }: { children: React.ReactNode }) {
   // Show layout with sidebar and topbar for authenticated users
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar />
+      <Sidebar sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <Topbar />
+        <Topbar onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>

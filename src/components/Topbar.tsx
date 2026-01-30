@@ -7,6 +7,7 @@ import toast from 'react-hot-toast'
 import {
   Bell,             // Notification bell
   ChevronDown,      // Down arrow
+  Menu,             // Hamburger menu
   UserCircle,       // User profile icon
   LogOut,           // Logout icon
   X,                // Close icon
@@ -15,7 +16,7 @@ import {
   Info,             // Info icon
   AlertTriangle     // Error icon
 } from 'lucide-react'
-import { Menu, Transition } from '@headlessui/react'
+import { Menu as HeadlessMenu, Transition } from '@headlessui/react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { useAuth } from '@/hooks/useAuth'
 import getSupabaseClient from '@/lib/supabase/client'
@@ -31,7 +32,11 @@ type Notification = {
   created_at: string
 }
 
-export function Topbar() {
+type TopbarProps = {
+  onMenuClick?: () => void
+}
+
+export function Topbar({ onMenuClick }: TopbarProps) {
   const router = useRouter()
   const { user, profile } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -195,9 +200,19 @@ export function Topbar() {
   return (
     <>
       <header className="bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 md:px-6 py-3.5 shadow-md sticky top-0 z-40">
-        <div className="flex items-center justify-between">
-          {/* Logo/Brand - Mobile */}
-          <div className="md:hidden flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          {/* Mobile: menu button + logo */}
+          <div className="md:hidden flex items-center gap-2 min-w-0 flex-1">
+            {onMenuClick && (
+              <button
+                type="button"
+                onClick={onMenuClick}
+                className="flex-shrink-0 p-2.5 rounded-lg bg-primary text-white hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:ring-offset-2 transition-colors"
+                aria-label="Open menu"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            )}
             {logoError ? (
               <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center shadow">
                 <CheckCircle2 className="w-5 h-5 text-white" />
@@ -206,9 +221,10 @@ export function Topbar() {
               <Image 
                 src="/formula-ihu-logo.png" 
                 alt="Formula IHU" 
-                width={120}
-                height={32}
+                width={240}
+                height={64}
                 className="h-8 w-auto object-contain drop-shadow-sm transition-transform duration-300 hover:scale-105"
+                quality={90}
                 priority
                 onError={() => setLogoError(true)}
               />
@@ -216,7 +232,7 @@ export function Topbar() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
             {/* Notifications */}
             <Popover>
               <PopoverTrigger asChild>
@@ -296,17 +312,17 @@ export function Topbar() {
             </Popover>
 
             {/* User Menu */}
-            <Menu as="div" className="relative">
-              <Menu.Button className="flex items-center gap-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 transition-all duration-300 hover:bg-gray-50 p-1.5 group">
+            <HeadlessMenu as="div" className="relative">
+              <HeadlessMenu.Button className="flex items-center gap-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 transition-all duration-300 hover:bg-gray-50 p-1.5 group">
                 <div className="w-9 h-9 bg-gradient-to-br from-primary to-primary-600 rounded-full flex items-center justify-center border-2 border-primary/20 shadow-md group-hover:shadow-lg transition-all duration-300 group-hover:scale-110">
                   <span className="text-sm font-semibold text-white">
                     {profile?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors hidden sm:block group-hover:rotate-180 duration-300" />
-              </Menu.Button>
+              </HeadlessMenu.Button>
               <Transition as={Fragment} enter="transition ease-out duration-200" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-150" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
-                <Menu.Items className="absolute right-0 mt-2 w-64 origin-top-right bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden">
+                <HeadlessMenu.Items className="absolute right-0 mt-2 w-64 origin-top-right bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden">
                   <div className="py-1.5">
                     <div className="px-4 py-3.5 text-sm border-b border-gray-100 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10">
                       <p className="font-bold text-gray-900">{profile?.first_name || ''} {profile?.last_name || ''}</p>
@@ -315,7 +331,7 @@ export function Topbar() {
                         <span className="text-xs text-gray-600 capitalize font-semibold">{userRole.replace(/_/g, ' ')}</span>
                       </div>
                     </div>
-                    <Menu.Item>{({ active }) => (
+                    <HeadlessMenu.Item>{({ active }) => (
                       <button 
                         onClick={() => router.push('/settings/profile')} 
                         className={`${active ? 'bg-primary/10 text-primary' : 'text-gray-700'} flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm transition-all duration-200 hover:bg-primary/5`}
@@ -323,8 +339,8 @@ export function Topbar() {
                         <UserCircle className="w-4 h-4" />
                         <span className="font-medium">Profile Settings</span>
                       </button>
-                    )}</Menu.Item>
-                    <Menu.Item>{({ active }) => (
+                    )}</HeadlessMenu.Item>
+                    <HeadlessMenu.Item>{({ active }) => (
                       <button 
                         onClick={signOutSupabase} 
                         disabled={isLoggingOut}
@@ -335,11 +351,11 @@ export function Topbar() {
                         <LogOut className="w-4 h-4" />
                         <span className="font-medium">{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
                       </button>
-                    )}</Menu.Item>
+                    )}</HeadlessMenu.Item>
                   </div>
-                </Menu.Items>
+                </HeadlessMenu.Items>
               </Transition>
-            </Menu>
+            </HeadlessMenu>
           </div>
         </div>
       </header>

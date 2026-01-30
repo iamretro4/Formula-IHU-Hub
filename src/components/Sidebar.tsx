@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Trophy, Calendar, CalendarCheck, CheckCircle2, Flag,
   Zap, FilePenLine, FileText, Building2, MessageSquare, User, LogOut,
   Users, Scale, FileCheck, Settings, ClipboardList, TrendingUp,
-  UserCircle, LogOut as LogoutIcon, Shield, Wrench
+  UserCircle, LogOut as LogoutIcon, Shield, Wrench, X
 } from "lucide-react"
 
 type NavItem = {
@@ -93,11 +93,15 @@ const navConfig: NavSection[] = [
   }
 ]
 
-export default function Sidebar() {
+type SidebarProps = {
+  sidebarOpen: boolean
+  setSidebarOpen: (open: boolean) => void
+}
+
+export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, profile: authProfile } = useAuth()
-  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoError, setLogoError] = useState(false)
 
@@ -123,18 +127,11 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile Sidebar Toggle */}
-      <button
-        className="md:hidden p-2.5 z-30 fixed top-4 left-3 rounded-lg bg-gradient-to-br from-primary to-primary-600 text-white shadow-xl hover:shadow-2xl hover:scale-110 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-all duration-300"
-        onClick={() => setSidebarOpen(x => !x)}
-        aria-label="Toggle sidebar"
-      >
-        <LayoutDashboard className="w-5 h-5" />
-      </button>
       {/* Overlay for mobile only */}
       <div
-        className={`fixed inset-0 bg-black bg-opacity-20 z-20 transition-opacity ${sidebarOpen ? 'block' : 'hidden'} md:hidden`}
+        className={`fixed inset-0 bg-black/30 z-20 transition-opacity ${sidebarOpen ? 'block' : 'hidden'} md:hidden`}
         onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
       />
       {/* Sidebar */}
       <aside
@@ -143,22 +140,34 @@ export default function Sidebar() {
         } md:translate-x-0 w-64 md:w-64 sm:w-56 h-screen bg-gradient-to-b from-white via-white to-gray-50/30 border-r border-gray-200 shadow-xl flex flex-col`}
         style={{ transition: 'transform 300ms cubic-bezier(0.4, 0, 0.2, 1)' }}
       >
-        <div className="px-6 py-5 flex items-center justify-center border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50">
-          {logoError ? (
-            <svg className="w-12 h-12 text-primary" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
-            </svg>
-          ) : (
-            <Image
-              src="/formula-ihu-logo.png"
-              alt="Formula IHU Logo"
-              width={96}
-              height={48}
-              className="h-12 w-auto object-contain drop-shadow-md transition-transform duration-300 hover:scale-105"
-              priority
-              onError={() => setLogoError(true)}
-            />
-          )}
+        <div className="px-4 py-5 flex items-center justify-between border-b border-gray-200 bg-gradient-to-r from-white to-gray-50/50">
+          <div className="flex-1 flex items-center justify-center min-w-0">
+            {logoError ? (
+              <svg className="w-12 h-12 text-primary" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+              </svg>
+            ) : (
+              <Image
+                src="/formula-ihu-logo.png"
+                alt="Formula IHU Logo"
+                width={192}
+                height={96}
+                className="h-12 w-auto object-contain drop-shadow-md transition-transform duration-300 hover:scale-105"
+                quality={90}
+                priority
+                onError={() => setLogoError(true)}
+              />
+            )}
+          </div>
+          {/* Close button - mobile only */}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden flex-shrink-0 p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-4">
           {navConfig.map((section, i) => {
@@ -198,6 +207,7 @@ export default function Sidebar() {
       ) : (
                                 <Link
                                   href={item.href}
+                                  onClick={() => setSidebarOpen(false)}
                                   className={`group flex items-center gap-2 sm:gap-3 rounded-lg px-2 sm:px-3 py-2.5 sm:py-2.5 text-xs sm:text-sm font-medium transition-all duration-300
                                     hover:bg-primary/10 hover:text-primary hover:shadow-md hover:translate-x-1
                                     ${pathname.startsWith(item.href) ? 'bg-gradient-to-r from-primary/10 to-primary/5 text-primary font-semibold shadow-md border-l-4 border-primary' : 'text-gray-700'}`}>

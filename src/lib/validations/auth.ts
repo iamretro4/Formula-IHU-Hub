@@ -1,11 +1,9 @@
 // =====================================================
 // Formula IHU Hub - Authentication & Validation
-// File: src/lib/auth.ts
+// File: src/lib/validations/auth.ts
 // =====================================================
 
 import { z } from "zod"
-import type { NextAuthOptions } from "next-auth"
-import CredentialsProvider from "next-auth/providers/credentials"
 
 // ------------------------------------
 // Role definitions
@@ -52,44 +50,3 @@ export const profileCompletionSchema = z.object({
 export type RegisterFormData = z.infer<typeof registerSchema>
 export type LoginFormData = z.infer<typeof loginSchema>
 export type ProfileCompletionData = z.infer<typeof profileCompletionSchema>
-
-// ------------------------------------
-// NextAuth config
-// ------------------------------------
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "text" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        // ⚠️ Replace with your own login logic
-        if (
-          credentials?.email === "admin@formula-ihu.com" &&
-          credentials?.password === "password123"
-        ) {
-          return { id: "1", email: credentials.email, role: "admin" }
-        }
-        return null
-      },
-    }),
-  ],
-  pages: {
-    signIn: "/login",
-  },
-  session: {
-    strategy: "jwt",
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) token.role = (user as any).role
-      return token
-    },
-    async session({ session, token }) {
-      if (token) (session.user as any).role = token.role
-      return session
-    },
-  },
-}

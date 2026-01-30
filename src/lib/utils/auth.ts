@@ -1,15 +1,18 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { createBrowserClient } from '@supabase/ssr'
 import { Database } from '@/lib/types/database'
 import { logger } from './logger'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row']
 
+/** Supabase browser client type (from getSupabaseClient or createBrowserClient) */
+export type SupabaseBrowserClient = ReturnType<typeof createBrowserClient<Database>>
+
 /**
  * Get current authenticated user and their profile
- * @param supabase - Supabase client instance
+ * @param supabase - Supabase client instance (from getSupabaseClient or createClientSupabase)
  * @returns User and profile data, or null if not authenticated
  */
-export async function getCurrentUser(supabase: ReturnType<typeof createClientComponentClient<Database>>) {
+export async function getCurrentUser(supabase: SupabaseBrowserClient) {
   try {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     

@@ -18,7 +18,8 @@ import {
   X,
   Loader2,
   CloudUpload,
-  FileCheck
+  FileCheck,
+  ExternalLink
 } from "lucide-react"
 import getSupabaseClient from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -63,17 +64,24 @@ type UploadedFile = {
   uploaded_at: string
 }
 
-const documents = [
-  { key: 'powertrain_selection', label: 'Powertrain Selection', classes: ['EV', 'CV'], allowedTypes: [] },
-  { key: 'chassis_type', label: 'Chassis Type (CTS)', classes: ['EV', 'CV'], allowedTypes: [] },
-  { key: 'fuel_order', label: 'Fuel Type Order', classes: ['CV'], allowedTypes: [] },
-  { key: 'esoq', label: 'Electrical System Officer Qualification (ESOQ)', classes: ['EV'], allowedTypes: ['application/pdf'] },
-  { key: 'bppv', label: 'Business Plan Pitch Video (BPPV)', classes: ['EV', 'CV'], allowedTypes: ['text/plain'] },
-  { key: 'dss', label: 'Design Spec Sheet (DSS)', classes: ['EV', 'CV'], allowedTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'] },
-  { key: 'edr', label: 'Engineering Design Report (EDR)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'] },
-  { key: 'team_designation', label: 'Team Member Designation', classes: ['EV', 'CV'], allowedTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-excel'] },
-  { key: 'crd', label: 'Cost Report Documents (CRD)', classes: ['EV', 'CV'], allowedTypes: ['application/zip'] },
-  { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: ['text/plain'] },
+type DocumentSpec = {
+  key: string
+  label: string
+  classes: string[]
+  allowedTypes: string[]
+  deadline: string
+  submission: string
+  format: string
+  fileSize: string
+}
+
+const documents: DocumentSpec[] = [
+  { key: 'bpefs', label: 'Business Plan Executive & Financial Summary (BPEFS)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '' },
+  { key: 'tvsd', label: 'Technical Vehicle System Documentation (TVSD)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
+  { key: 'esoq', label: 'Electrical System Officer Qualification (ESOQ)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '02/06/2026 23:59:59', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
+  { key: 'tmd', label: 'Team Member Designation (TMD)', classes: ['EV', 'CV'], allowedTypes: [], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: '', fileSize: '' },
+  { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: ['text/plain'], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: 'Youtube Link', fileSize: '50MB' },
+  { key: 'crd', label: 'Cost Report Documents (CRD)', classes: ['EV', 'CV'], allowedTypes: ['application/zip'], deadline: '15/07/2026 23:59:59', submission: 'Formula IHU Portal', format: '.zip', fileSize: '50MB' },
 ]
 
 const fetchAnnouncements = async (): Promise<Announcement[]> => [
@@ -149,6 +157,7 @@ export default function DashboardPage() {
       const { data } = await supabase
         .from('team_uploads' as any)
         .select('*, uploaded_by (first_name, last_name)')
+        .eq('team_id', teamId)
         .order('uploaded_at', { ascending: false });
       setUploadedFiles((data ?? []) as unknown as UploadedFile[]);
     } catch (error) {
@@ -240,6 +249,12 @@ export default function DashboardPage() {
     }
 
     const file = uploadFiles[docKey]!;
+    const docSpec = documents.find(d => d.key === docKey);
+    const maxBytes = docSpec?.fileSize === '50MB' ? 50 * 1024 * 1024 : undefined;
+    if (maxBytes != null && file.size > maxBytes) {
+      toast.error(`File size must be at most 50MB. Your file is ${formatFileSize(file.size)}.`);
+      return;
+    }
     const safeFileName = sanitizeFileName(file.name);
     const path = `${profile.team_id}/${docKey}/${safeFileName}`;
 
@@ -266,14 +281,17 @@ export default function DashboardPage() {
         return;
       }
 
-              const { error: metaError } = await supabase.from('team_uploads' as any).upsert({
-        team_id: profile.team_id,
-        uploaded_by: user.id,
-        document_key: docKey,
-        file_name: file.name,
-        storage_path: path,
-        uploaded_at: new Date().toISOString(),
-      } as any);
+              const { error: metaError } = await supabase.from('team_uploads' as any).upsert(
+        {
+          team_id: profile.team_id,
+          uploaded_by: user.id,
+          document_key: docKey,
+          file_name: file.name,
+          storage_path: path,
+          uploaded_at: new Date().toISOString(),
+        } as any,
+        { onConflict: 'team_id,document_key' }
+      );
 
       if (metaError) {
         toast.error(`Metadata update failed: ${metaError.message}`, { id: uploadToast });
@@ -281,6 +299,17 @@ export default function DashboardPage() {
         toast.success('Upload successful!', { id: uploadToast });
         await fetchUploadedFiles(profile.team_id);
         setUploadFiles(f => ({ ...f, [docKey]: null }));
+        // Sync to Google Drive (fire-and-forget; each team has its own subfolder)
+        fetch('/api/sync-upload-to-drive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            team_id: profile.team_id,
+            storage_path: path,
+            file_name: file.name,
+            document_key: docKey,
+          }),
+        }).catch(() => {});
       }
     } catch (error) {
       toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: uploadToast });
@@ -369,12 +398,14 @@ export default function DashboardPage() {
             </p>
           </div>
         </div>
+        {/* Temporarily hidden: counters
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <StatsCard label="Teams" value={stats.teams} icon={<Users2 className="w-6 h-6 text-primary" />} bg="bg-gradient-to-br from-primary/10 to-primary/5" borderColor="border-primary/20" />
           <StatsCard label="Vehicles" value={stats.vehicles} icon={<Flag className="w-6 h-6 text-green-600" />} bg="bg-gradient-to-br from-green-50 to-green-100/50" borderColor="border-green-200" />
           <StatsCard label="Events" value={stats.events} icon={<BarChart3 className="w-6 h-6 text-amber-600" />} bg="bg-gradient-to-br from-amber-50 to-amber-100/50" borderColor="border-amber-200" />
           <StatsCard label="Active Sessions" value={stats.activeSessions} icon={<Clock className="w-6 h-6 text-blue-600" />} bg="bg-gradient-to-br from-blue-50 to-blue-100/50" borderColor="border-blue-200" />
         </div>
+        */}
       </div>
 
       {/* Uploads Section (admins and team leaders/members) */}
@@ -389,6 +420,61 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-600 mt-1">Upload your team&rsquo;s required documentation</p>
             </div>
           </div>
+
+          {/* Document requirements table: Document | EV | CV | Deadline | Submission | Format | File Size */}
+          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50/80">
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Document</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-900">EV</th>
+                  <th className="px-4 py-3 text-center font-semibold text-gray-900">CV</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Deadline</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Submission</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Format</th>
+                  <th className="px-4 py-3 text-left font-semibold text-gray-900">File Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                {documents
+                  .filter(doc => !teamClass || doc.classes.includes(teamClass))
+                  .map((doc, idx) => (
+                    <tr
+                      key={doc.key}
+                      className={`border-b border-gray-100 last:border-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
+                    >
+                      <td className="px-4 py-3 font-medium text-gray-900">{doc.label}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center justify-center text-primary" title="Expert Verification">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex items-center justify-center text-primary" title="Committee Verification">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{doc.deadline}</td>
+                      <td className="px-4 py-3">
+                        <a
+                          href="#"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                          onClick={(e) => { e.preventDefault(); }}
+                        >
+                          {doc.submission}
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </td>
+                      <td className={`px-4 py-3 ${doc.format === '.pdf' ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
+                        {doc.format || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-gray-700">{doc.fileSize || '—'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {documents
               .filter(doc => !teamClass || doc.classes.includes(teamClass))
@@ -553,9 +639,8 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Main Content: announcements/schedule */}
+      {/* Temporarily hidden: Live Announcements and Today's Schedule
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Live Announcements */}
         <Card className="border-gray-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="pb-4 bg-gradient-to-r from-orange-50/50 to-transparent border-b border-gray-100">
             <SectionHeader icon={<Megaphone className="w-6 h-6 text-orange-500" />} title="Live Announcements" />
@@ -580,8 +665,6 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-        
-        {/* Today's Schedule */}
         <Card className="border-gray-200 shadow-lg hover:shadow-xl transition-shadow duration-300">
           <CardHeader className="pb-4 bg-gradient-to-r from-primary/5 to-transparent border-b border-gray-100">
             <SectionHeader icon={<CalendarDays className="w-6 h-6 text-primary" />} title="Today's Schedule" />
@@ -610,6 +693,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+      */}
     </div>
   )
 }

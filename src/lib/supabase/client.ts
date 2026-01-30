@@ -69,6 +69,15 @@ function cleanupMalformedCookies() {
   }
 }
 
+/** Returns true when Supabase env vars are set (avoids throwing in UI when missing). */
+export function hasSupabaseEnv(): boolean {
+  return Boolean(
+    typeof process !== 'undefined' &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  )
+}
+
 // Helper function to refresh session if needed
 async function ensureValidSession(client: ReturnType<typeof createBrowserClient<Database>>) {
   try {
@@ -224,9 +233,14 @@ export default function getSupabaseClient() {
 }
 
 // Export helper function for components to use
-export async function refreshSupabaseSession() {
-  const client = getSupabaseClient()
-  return await ensureValidSession(client)
+export async function refreshSupabaseSession(): Promise<boolean> {
+  if (!hasSupabaseEnv()) return false
+  try {
+    const client = getSupabaseClient()
+    return await ensureValidSession(client)
+  } catch {
+    return false
+  }
 }
 
 // Helper function to ensure client has valid session before making queries

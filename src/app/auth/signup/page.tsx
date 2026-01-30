@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
+import {
+  REGISTRATION_CATEGORY_ORDER,
+  getCategoryLabel,
+  getTeamsByCategory,
+} from '@/lib/data/registration-teams'
 
 export default function SignUpPage() {
   const [isLoading, setIsLoading] = useState(false)
@@ -44,6 +49,11 @@ export default function SignUpPage() {
       teamId: '',
       campsiteStaying: false,
       teamLead: false,
+      universityName: '',
+      facultyAdvisorName: '',
+      facultyAdvisorPosition: '',
+      billingAddress: '',
+      vatId: '',
       password: '',
       confirmPassword: '',
     },
@@ -100,6 +110,8 @@ export default function SignUpPage() {
     fetchTeams()
   }, [])
 
+  const isUuid = (s: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)
+
   const onSubmit = async (data: SignUpInput) => {
     setIsLoading(true)
     setError(null)
@@ -121,6 +133,16 @@ export default function SignUpPage() {
         return
       }
 
+      let teamId: string | null = null
+      if (data.teamId) {
+        if (isUuid(data.teamId)) {
+          teamId = data.teamId
+        } else {
+          const match = teams.find((t) => t.name === data.teamId)
+          if (match) teamId = match.id
+        }
+      }
+
       const metadata = {
         first_name: data.firstName,
         last_name: data.lastName,
@@ -128,9 +150,14 @@ export default function SignUpPage() {
         phone: data.phone,
         emergency_contact: data.emergencyContact,
         ehic_number: data.ehicNumber ? data.ehicNumber : null,
-        team_id: data.teamId ? data.teamId : null, // nullable
+        team_id: teamId,
         campsite_staying: !!data.campsiteStaying,
         team_lead: !!data.teamLead,
+        university_name: data.universityName || null,
+        faculty_advisor_name: data.facultyAdvisorName || null,
+        faculty_advisor_position: data.facultyAdvisorPosition || null,
+        billing_address: data.billingAddress || null,
+        vat_id: data.vatId || null,
         app_role: data.teamLead ? 'team_leader' : 'viewer',
         profile_completed: false,
       }
@@ -172,13 +199,14 @@ export default function SignUpPage() {
       <div className="max-w-3xl w-full space-y-8 relative z-10 animate-fade-in">
         {/* Logo and Header */}
         <div className="text-center">
-          <div className="mx-auto w-20 h-20 bg-gradient-to-br from-primary via-primary/90 to-primary/80 rounded-2xl flex items-center justify-center shadow-2xl mb-6 ring-4 ring-primary/20 transform hover:scale-105 transition-transform duration-300">
+          <div className="mx-auto w-28 h-28 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-gray-100 mb-6 p-3 transform hover:scale-105 transition-transform duration-300">
             <Image
               src="/formula-ihu-logo.png"
               alt="Formula IHU"
-              width={48}
-              height={48}
-              className="w-12 h-12 object-contain"
+              width={88}
+              height={88}
+              className="w-full h-full object-contain"
+              quality={90}
               priority
             />
           </div>
@@ -369,6 +397,77 @@ export default function SignUpPage() {
               </div>
             </div>
 
+            {/* University & Billing */}
+            <div className="space-y-5">
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                <Building2 className="w-4 h-4 text-primary" />
+                University & Billing
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-gray-500" />
+                    University Name <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('universityName')}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    placeholder="e.g. International Hellenic University"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Faculty Advisor Name <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('facultyAdvisorName')}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    placeholder="Advisor full name"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Faculty Advisor Position <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('facultyAdvisorPosition')}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    placeholder="e.g. Professor, Department Head"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Billing Address <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('billingAddress')}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    placeholder="Street, city, postal code, country"
+                    disabled={isLoading}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    VAT ID <span className="text-gray-400 text-xs">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    {...register('vatId')}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    placeholder="e.g. EL123456789"
+                    disabled={isLoading}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Team Selection and Campsite */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
               <div className="space-y-2">
@@ -388,11 +487,24 @@ export default function SignUpPage() {
                     disabled={isLoading}
                   >
                     <option value="">Select your team</option>
-                    {teams.map(team => (
-                      <option key={team.id} value={team.id}>
-                        {team.name} ({team.code}) {team.vehicle_class ? `- ${team.vehicle_class}` : ''}
-                      </option>
-                    ))}
+                    {REGISTRATION_CATEGORY_ORDER.map((category) => {
+                      const teamNames = getTeamsByCategory().get(category) ?? []
+                      if (teamNames.length === 0) return null
+                      return (
+                        <optgroup key={category} label={getCategoryLabel(category)}>
+                          {teamNames.map((teamName) => {
+                            const dbTeam = teams.find((t) => t.name === teamName)
+                            const value = dbTeam ? dbTeam.id : teamName
+                            return (
+                              <option key={value} value={value}>
+                                {teamName}
+                                {dbTeam ? ` (${dbTeam.code})${dbTeam.vehicle_class ? ` - ${dbTeam.vehicle_class}` : ''}` : ''}
+                              </option>
+                            )
+                          })}
+                        </optgroup>
+                      )
+                    })}
                   </select>
                 )}
                 {errors.teamId && (

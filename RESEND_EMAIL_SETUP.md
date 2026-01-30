@@ -1,18 +1,23 @@
 # Resend Email Configuration for Supabase
 
-## ✅ Already Configured
+## ✅ Already Configured (in this repo)
 
-1. **SMTP Settings** in `supabase/config.toml`:
+1. **SMTP Settings** in `supabase/config.toml` (used when running **local Supabase** only):
    - Host: `smtp.resend.com`
-   - Port: `465` (SSL)
+   - Port: `587` (TLS)
    - Username: `resend`
-   - Password: Your Resend API key
+   - Password: `env(RESEND_API_KEY)` — read from `.env` in project root when you run `supabase start`
    - Sender Email: `noreply@fihu.gr`
    - Sender Name: `Formula IHU Hub`
 
-2. **Email Rate Limit**: Set to 10 emails per hour (safe for Resend free tier)
+2. **Email Rate Limit**: 10 emails per hour (safe for Resend free tier)
 
-3. **Redirect URLs**: Added reset password URLs to allowed redirects
+3. **Redirect URLs**: Reset password URLs for `127.0.0.1` and `localhost` are in `config.toml`
+
+## ⚠️ Important: Cloud vs Local
+
+- **Supabase Cloud** (your project at `*.supabase.co`): The `config.toml` in this repo does **not** control your cloud project. You **must** configure SMTP in the [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **SMTP Settings**. Use the same values as above and set **Password** to your Resend API key (the one in `.env.local`).
+- **Local Supabase** (`supabase start`): The CLI reads `RESEND_API_KEY` from a **`.env`** file in the project root (not `.env.local`). Either add `RESEND_API_KEY=...` to a root `.env`, or the CLI won’t have the key and SMTP will fail.
 
 ## 🔧 Additional Steps Required
 
@@ -46,18 +51,33 @@ additional_redirect_urls = [
 ]
 ```
 
-### 3. Security Best Practice (Optional but Recommended)
+### 3. Supabase Cloud: Set SMTP and Redirect URLs
 
-Instead of hardcoding the API key, use an environment variable:
+If you use **Supabase Cloud** (hosted at `*.supabase.co`):
 
-1. Create a `.env` file in your project root (if not exists)
-2. Add: `RESEND_API_KEY=re_EZpM4s8n_AJph7pU4R4QSyr47wP6mYHv7`
-3. Update `supabase/config.toml`:
-   ```toml
-   pass = "env(RESEND_API_KEY)"
-   ```
+1. **SMTP**: In [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **SMTP Settings**:
+   - Enable **Custom SMTP**
+   - Host: `smtp.resend.com`
+   - Port: `587`
+   - Username: `resend`
+   - Password: your Resend API key (same value as in `.env.local`)
+   - Sender email: `noreply@fihu.gr`
+   - Sender name: `Formula IHU Hub`
 
-### 4. Test Email Sending
+2. **Redirect URLs**: In **Authentication** → **URL Configuration** → **Redirect URLs**, add:
+   - `http://localhost:3000/auth/reset-password` (local dev)
+   - Your production URL when deployed, e.g. `https://your-domain.com/auth/reset-password`
+
+### 4. Local Supabase: Resend API key in `.env`
+
+For **local Supabase** (`supabase start`), the CLI reads `RESEND_API_KEY` from a **`.env`** file in the project root (not `.env.local`). Either:
+
+- Add to a root `.env`: `RESEND_API_KEY=<your-key>` (same value as in `.env.local`), or  
+- Ensure your local Supabase is started with access to that env var (e.g. via your shell or a script that exports it).
+
+The `config.toml` already has `pass = "env(RESEND_API_KEY)"`.
+
+### 5. Test Email Sending
 
 1. Restart Supabase: `supabase stop && supabase start`
 2. Test password reset:
@@ -66,7 +86,7 @@ Instead of hardcoding the API key, use an environment variable:
    - Check if email is received
 3. Check Resend dashboard for delivery status
 
-### 5. Local Development vs Production
+### 6. Local Development vs Production
 
 **For Local Development:**
 - You can keep using Inbucket (email testing server) by disabling SMTP
