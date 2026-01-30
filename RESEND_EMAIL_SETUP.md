@@ -6,10 +6,10 @@ There are **two separate email systems**. Both must be configured.
 
 | What | Where to configure |
 |------|--------------------|
-| **Password reset / auth emails** | **Supabase Dashboard** (see below) — Supabase sends these; the repo’s `config.toml` does **not** affect your cloud project. |
+| **Signup confirmation / password reset / auth emails** | **Supabase Dashboard** (see below) — Supabase sends these; the repo’s `config.toml` does **not** affect your cloud project. |
 | **App emails** (e.g. “Account approved”) | **Vercel** — add `RESEND_API_KEY` (and optionally `NEXT_PUBLIC_APP_URL`) in Project → Settings → Environment Variables, then redeploy. |
 
-### 1. Supabase Cloud (required for password reset / signup emails)
+### 1. Supabase Cloud (required for confirmation + password reset emails)
 
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **SMTP Settings**.
 2. Enable **Custom SMTP** and set:
@@ -20,7 +20,9 @@ There are **two separate email systems**. Both must be configured.
    - **Sender email:** `noreply@fihu.gr` (or leave default; if using custom domain, [verify it in Resend](https://resend.com/domains) first)
    - **Sender name:** `Formula IHU Hub`
 3. Save.
-4. Go to **Authentication** → **URL Configuration** → **Redirect URLs** and add:
+4. **Enable signup confirmation** (so users receive a “Confirm your email” message): **Authentication** → **Providers** → **Email** → turn on **“Confirm email”**. Save.
+5. **(Optional)** To use the same branded confirmation email as in the repo: **Authentication** → **Email Templates** → **Confirm signup** → set **Subject** to `Confirm your email — Formula IHU Hub` and paste the contents of `supabase/templates/confirmation.html` into **Message (HTML)**. Keep `{{ .ConfirmationURL }}` unchanged.
+6. Go to **Authentication** → **URL Configuration** → **Redirect URLs** and add:
    - `https://your-production-domain.com/auth/reset-password` (replace with your real app URL, e.g. `https://formula-ihu-hub.vercel.app/auth/reset-password`)
 
 ### 2. Vercel (required for “Account approved” / new user notification emails)
@@ -123,6 +125,12 @@ The `config.toml` already has `pass = "env(RESEND_API_KEY)"`.
 2. In the **Test email** card, enter an email (or leave empty to send to your account email) and click **Send test email**.
 3. Check the inbox and the [Resend dashboard](https://resend.com/emails) for delivery status.
 
+**Signup confirmation (Supabase Auth):**
+
+1. Restart Supabase locally if needed: `supabase stop && supabase start`
+2. Go to `/auth/signup`, create an account with a real email, and submit.
+3. Check inbox for “Confirm your email — Formula IHU Hub” and click the link.
+
 **Password reset (Supabase Auth):**
 
 1. Restart Supabase locally if needed: `supabase stop && supabase start`
@@ -139,7 +147,12 @@ The `config.toml` already has `pass = "env(RESEND_API_KEY)"`.
 - Must use Resend SMTP (already configured)
 - Domain must be verified in Resend
 
-## 📧 Auth email templates (password reset, etc.)
+## 📧 Auth email templates (confirmation, password reset)
+
+- **Confirmation (signup):** `supabase/templates/confirmation.html` is wired in `config.toml` under `[auth.email.template.confirmation]`. Users receive this after signup when **Confirm email** is enabled.
+- **Recovery (password reset):** see below.
+
+## 📧 Recovery (password reset) template
 
 A branded reset-password template with the Formula IHU logo and layout is in the repo.
 

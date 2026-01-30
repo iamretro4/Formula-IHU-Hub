@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -108,6 +109,7 @@ export default function ChecklistBookingPage() {
   const params = useParams<{ bookingId: string }>()
   const bookingId = params?.bookingId
   const router = useRouter()
+  const { profile: authProfile, loading: authLoading } = useAuth()
   const supabase = useMemo(() => getSupabaseClient(), [])
   const [booking, setBooking] = useState<Booking | null>(null)
   const [checklist, setChecklist] = useState<ChecklistTemplate[]>([])
@@ -123,6 +125,14 @@ export default function ChecklistBookingPage() {
   const [comments, setComments] = useState<Record<string, InspectionComment[]>>({})
   const [reinspectLoading, setReinspectLoading] = useState(false)
   const pollingRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Team leaders only get User Management; redirect if they hit scrutineering
+  useEffect(() => {
+    if (authLoading || !authProfile) return
+    if (authProfile.app_role === 'team_leader') {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, authProfile, router])
 
   const TYPE_ICONS: Record<string, React.ReactNode> = {
     Electrical: <Zap className="w-5 h-5" />,

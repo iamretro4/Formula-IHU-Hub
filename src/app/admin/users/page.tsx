@@ -106,6 +106,8 @@ export default function UserManagementPage() {
   const [userTeamId, setUserTeamId] = useState<string | null>(null)
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const [editingRole, setEditingRole] = useState<string>('')
+  const [editingTeamId, setEditingTeamId] = useState<string>('')
+  const [editingEmail, setEditingEmail] = useState<string>('')
   const [saving, setSaving] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
@@ -317,11 +319,15 @@ export default function UserManagementPage() {
   const handleEditRole = (user: UserProfile) => {
     setEditingUserId(user.id)
     setEditingRole(user.app_role || '')
+    setEditingTeamId(user.team_id ?? '')
+    setEditingEmail(user.email ?? '')
   }
 
   const handleCancelEdit = () => {
     setEditingUserId(null)
     setEditingRole('')
+    setEditingTeamId('')
+    setEditingEmail('')
   }
 
   const handleSaveRole = async (userId: string) => {
@@ -345,6 +351,21 @@ export default function UserManagementPage() {
       }
     }
 
+    // Validate email if admin changed it
+    const targetUser = users.find(u => u.id === userId)
+    const emailChanged = userRole === 'admin' && targetUser && (editingEmail.trim().toLowerCase() !== (targetUser.email ?? '').trim().toLowerCase())
+    if (emailChanged) {
+      const trimmed = editingEmail.trim().toLowerCase()
+      if (!trimmed) {
+        toast.error('Email cannot be empty')
+        return
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        toast.error('Invalid email format')
+        return
+      }
+    }
+
     setSaving(userId)
     try {
       const sessionValid = await refreshSupabaseSession()
@@ -363,16 +384,36 @@ export default function UserManagementPage() {
         return
       }
 
-      logger.debug('Updating user role', { 
+      // Update email via API (auth + user_profiles) when admin changed it
+      if (emailChanged) {
+        const res = await fetch('/api/admin/update-user-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, email: editingEmail.trim().toLowerCase() }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          toast.error(data.message || 'Failed to update email')
+          setSaving(null)
+          return
+        }
+      }
+
+      logger.debug('Updating user role', {
         userId,
         newRole: editingRole,
         currentUser: user.id,
         context: 'user_management'
       })
 
+      const updatePayload: { app_role: string; team_id?: string | null } = { app_role: editingRole as any }
+      if (userRole === 'admin') {
+        updatePayload.team_id = (editingTeamId && editingTeamId !== 'none') ? editingTeamId : null
+      }
+
       const updatePromise = supabase
         .from('user_profiles')
-        .update({ app_role: editingRole as any })
+        .update(updatePayload as any)
         .eq('id', userId)
         .select()
         .single()
@@ -418,13 +459,26 @@ export default function UserManagementPage() {
         context: 'user_management'
       })
 
-      setUsers(users.map(u => 
-        u.id === userId ? { ...u, app_role: editingRole as any } : u
+      const newTeamId = (userRole === 'admin' && editingTeamId && editingTeamId !== 'none') ? editingTeamId : null
+      const newTeam = newTeamId ? teams.find(t => t.id === newTeamId) : null
+      const newEmail = emailChanged ? editingEmail.trim().toLowerCase() : undefined
+      setUsers(users.map(u =>
+        u.id === userId
+          ? {
+              ...u,
+              app_role: editingRole as any,
+              team_id: newTeamId ?? u.team_id,
+              teams: newTeam ? { name: newTeam.name, code: newTeam.code } : null,
+              ...(newEmail !== undefined ? { email: newEmail } : {}),
+            }
+          : u
       ))
 
-      toast.success('Role updated successfully')
+      toast.success(emailChanged ? 'User updated successfully' : 'Role updated successfully')
       setEditingUserId(null)
       setEditingRole('')
+      setEditingTeamId('')
+      setEditingEmail('')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update role'
       logger.error('Role update failed', error, { context: 'user_management' })
@@ -837,10 +891,20 @@ export default function UserManagementPage() {
                           </div>
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Mail className="w-4 h-4 text-gray-400" />
-                            {user.email}
-                          </div>
+                          {userRole === 'admin' && editingUserId === user.id ? (
+                            <Input
+                              type="email"
+                              value={editingEmail}
+                              onChange={(e) => setEditingEmail(e.target.value)}
+                              placeholder="email@example.com"
+                              className="w-48 text-sm"
+                            />
+                          ) : (
+                            <div className="flex items-center gap-2 text-sm text-gray-600">
+                              <Mail className="w-4 h-4 text-gray-400" />
+                              {user.email}
+                            </div>
+                          )}
                         </td>
                         <td className="py-4 px-4">
                           {editingUserId === user.id ? (
@@ -869,7 +933,24 @@ export default function UserManagementPage() {
                         </td>
                         {userRole === 'admin' && (
                           <td className="py-4 px-4">
-                            {user.teams ? (
+                            {editingUserId === user.id ? (
+                              <Select
+                                value={editingTeamId || 'none'}
+                                onValueChange={setEditingTeamId}
+                              >
+                                <SelectTrigger className="w-48">
+                                  <SelectValue placeholder="Select team" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">No team</SelectItem>
+                                  {teams.map((team) => (
+                                    <SelectItem key={team.id} value={team.id}>
+                                      {team.name} ({team.code})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : user.teams ? (
                               <div className="flex items-center gap-2">
                                 <Building2 className="w-4 h-4 text-gray-400" />
                                 <span className="text-sm text-gray-600">

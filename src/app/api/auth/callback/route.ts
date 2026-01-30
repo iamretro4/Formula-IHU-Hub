@@ -21,30 +21,35 @@ export async function GET(request: NextRequest) {
     if (user) {
       // Upsert user profile from auth metadata
       const metadata = user.user_metadata as any
-      
-      // Upsert profile from metadata; do not include login_approved or app_role so we do not overwrite admin-set values
+
+      // Build upsert payload. Only include team_id when metadata has one so we don't overwrite
+      // the value set by the DB trigger (selected team is stored at signup; session metadata may omit it).
+      const profilePayload: Record<string, unknown> = {
+        id: user.id,
+        email: user.email!,
+        first_name: metadata.first_name || '',
+        last_name: metadata.last_name || '',
+        father_name: metadata.father_name || '',
+        phone: metadata.phone || '',
+        emergency_contact: metadata.emergency_contact || '',
+        campsite_staying: metadata.campsite_staying || false,
+        ehic_number: metadata.ehic_number || null,
+        profile_completed: false,
+        university_name: metadata.university_name || null,
+        faculty_advisor_name: metadata.faculty_advisor_name || null,
+        faculty_advisor_position: metadata.faculty_advisor_position || null,
+        billing_address: metadata.billing_address || null,
+        vat_id: metadata.vat_id || null,
+      }
+      if (metadata.team_id != null && metadata.team_id !== '') {
+        profilePayload.team_id = metadata.team_id
+      }
+
       await supabase
         .from('user_profiles')
-        .upsert({
-          id: user.id,
-          email: user.email!,
-          first_name: metadata.first_name || '',
-          last_name: metadata.last_name || '',
-          father_name: metadata.father_name || '',
-          phone: metadata.phone || '',
-          emergency_contact: metadata.emergency_contact || '',
-          campsite_staying: metadata.campsite_staying || false,
-          ehic_number: metadata.ehic_number || null,
-          team_id: metadata.team_id || null,
-          profile_completed: false,
-          university_name: metadata.university_name || null,
-          faculty_advisor_name: metadata.faculty_advisor_name || null,
-          faculty_advisor_position: metadata.faculty_advisor_position || null,
-          billing_address: metadata.billing_address || null,
-          vat_id: metadata.vat_id || null,
-        } as any, { 
+        .upsert(profilePayload as any, {
           onConflict: 'id',
-          ignoreDuplicates: false
+          ignoreDuplicates: false,
         })
     }
   }

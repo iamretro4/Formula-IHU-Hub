@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
 import { DateTime } from 'luxon'
 import {
@@ -78,11 +79,19 @@ const EEST_ZONE = 'Europe/Athens'
 const FEEDBACK_SLOTS_TIMES = ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30']
 
 export default function FeedbackBookingPage() {
+  const router = useRouter()
   const supabase = useMemo(() => getSupabaseClient(), [])
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [teamId, setTeamId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
+
+  // Team leaders only get User Management; redirect if they hit feedback
+  useEffect(() => {
+    if (profile?.app_role === 'team_leader') {
+      router.replace('/dashboard')
+    }
+  }, [profile?.app_role, router])
 
   const [approvedEvents, setApprovedEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)

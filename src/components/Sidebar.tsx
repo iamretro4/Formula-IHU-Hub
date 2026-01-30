@@ -37,11 +37,11 @@ const navConfig: NavSection[] = [
   },
   {
     label: 'SCRUTINEERING',
-    labelRoles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member'],
+    labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'],
     items: [
-      { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible', 'team_member'] },
-      { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'team_leader', 'inspection_responsible', 'team_member'] },
-      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'team_leader', 'inspection_responsible'] }
+      { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'] },
+      { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_member'] },
+      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible'] }
     ]
   },
   {
@@ -65,14 +65,14 @@ const navConfig: NavSection[] = [
   },
   {
     label: 'TEAM FEATURES',
-    labelRoles: ['admin', 'team_leader', 'team_member', 'inspection_responsible'],
+    labelRoles: ['admin', 'team_member', 'inspection_responsible'],
     items: [
-      { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_leader', 'team_member', 'inspection_responsible'] }
+      { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_member', 'inspection_responsible'] }
     ]
   },
   {
     label: 'ADMINISTRATION',
-    labelRoles: ['admin', 'scrutineer'],
+    labelRoles: ['admin', 'scrutineer', 'team_leader'],
     items: [
       { label: 'Admin Panel', href: '/admin', icon: <Shield className="w-5 h-5" />, roles: ['admin'] },
       { label: 'User Management', href: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin', 'team_leader'] },

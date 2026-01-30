@@ -114,7 +114,15 @@ export default function ScrutineeringCalendarDay() {
   const today = new Date().toISOString().split('T')[0]
   const supabase = useMemo(() => getSupabaseClient(), [])
   const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user, profile: authProfile, loading: authLoading } = useAuth()
+
+  // Team leaders only get User Management; redirect if they hit scrutineering
+  useEffect(() => {
+    if (authLoading || !authProfile) return
+    if (authProfile.app_role === 'team_leader') {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, authProfile, router])
 
   const fetchData = useCallback(async () => {
     if (authLoading || !user) return

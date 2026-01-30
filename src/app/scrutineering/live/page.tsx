@@ -1,7 +1,9 @@
 'use client'
 import { useEffect, useState, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -73,6 +75,8 @@ type InspectionProgress = {
 }
 
 export default function InspectionQueuePage() {
+  const router = useRouter()
+  const { profile: authProfile, loading: authLoading } = useAuth()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [role, setRole] = useState<string>('')
   const [teamId, setTeamId] = useState<string | null>(null)
@@ -84,6 +88,14 @@ export default function InspectionQueuePage() {
   const [authError, setAuthError] = useState<string | null>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = useMemo(() => getSupabaseClient(), [])
+
+  // Team leaders only get User Management; redirect if they hit scrutineering
+  useEffect(() => {
+    if (authLoading || !authProfile) return
+    if (authProfile.app_role === 'team_leader') {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, authProfile, router])
 
   const TYPE_ICONS: Record<string, React.ReactNode> = {
     Electrical: <Zap className="w-4 h-4" />,

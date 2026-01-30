@@ -179,7 +179,7 @@ enable_signup = true
 # addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
-enable_confirmations = false
+enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
 secure_password_change = false
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
@@ -205,6 +205,10 @@ admin_email = "noreply@fihu.gr"
 sender_name = "Formula IHU Hub"
 
 # Custom email templates (local Supabase). For Supabase Cloud, paste the HTML in Dashboard → Authentication → Email Templates.
+[auth.email.template.confirmation]
+subject = "Confirm your email — Formula IHU Hub"
+content_path = "./supabase/templates/confirmation.html"
+
 [auth.email.template.recovery]
 subject = "Reset your password — Formula IHU Hub"
 content_path = "./supabase/templates/recovery.html"

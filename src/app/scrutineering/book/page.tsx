@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -112,6 +113,15 @@ export default function ScrutineeringBookPage() {
   const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate() ?? new Date().toISOString().split('T')[0]
   const adminViewTeamRef = useRef<string | null>(null)
   const effectRunIdRef = useRef(0)
+
+  // Team leaders only get User Management; redirect if they hit scrutineering
+  const router = useRouter()
+  useEffect(() => {
+    if (authLoading || !authProfile) return
+    if (authProfile.app_role === 'team_leader') {
+      router.replace('/dashboard')
+    }
+  }, [authLoading, authProfile, router])
 
   // Set adminViewTeam when profile/teams change (separate effect to avoid dependency cycle)
   useEffect(() => {

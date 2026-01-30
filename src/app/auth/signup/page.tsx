@@ -176,7 +176,7 @@ export default function SignUpPage() {
         return
       }
 
-      toast.success('Account created! An administrator must approve your account before you can sign in. You will be notified when approved.')
+      toast.success('Account created! Check your email to confirm your address, then an administrator must approve your account before you can sign in.')
       router.push('/auth/signin')
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account'
