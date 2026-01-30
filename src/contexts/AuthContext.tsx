@@ -97,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const getUserPromise = supabase.auth.getUser()
         const timeoutPromise = new Promise<{ data: { user: null }, error: Error }>((resolve) => {
           setTimeout(() => {
-            logger.warn('[AuthContext] getUser() timed out', { timeout: GET_USER_TIMEOUT, context: 'auth_timeout' })
+            logger.debug('[AuthContext] getUser() timed out', { timeout: GET_USER_TIMEOUT, context: 'auth_timeout' })
             resolve({ data: { user: null }, error: new Error('getUser() timed out') })
           }, GET_USER_TIMEOUT)
         })
@@ -112,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const getSessionPromise = supabase.auth.getSession()
             const sessionTimeoutPromise = new Promise<{ data: { session: null }, error: Error }>((resolve) => {
               setTimeout(() => {
-                logger.warn('[AuthContext] getSession() timed out', { timeout: GET_SESSION_TIMEOUT, context: 'auth_timeout' })
+                logger.debug('[AuthContext] getSession() timed out', { timeout: GET_SESSION_TIMEOUT, context: 'auth_timeout' })
                 resolve({ data: { session: null }, error: new Error('getSession() timed out') })
               }, GET_SESSION_TIMEOUT)
             })
@@ -165,7 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (userError) {
         // Handle timeout errors gracefully - don't throw, just treat as no user
         if (userError.message?.includes('timed out')) {
-          logger.warn('[AuthContext] Auth methods timed out - treating as no user', { errorMessage: userError.message, context: 'auth_timeout' })
+          logger.debug('[AuthContext] Auth methods timed out - treating as no user', { errorMessage: userError.message, context: 'auth_timeout' })
           setUser(null)
           setProfile(null)
           setLoading(false)

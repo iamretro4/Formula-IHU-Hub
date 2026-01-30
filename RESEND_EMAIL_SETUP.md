@@ -29,11 +29,12 @@ When an admin approves a new user, the app sends an “account approved” email
 
 1. Go to [Vercel](https://vercel.com) → your project → **Settings** → **Environment Variables**.
 2. Add:
-   - **`RESEND_API_KEY`** = your Resend API key (same value as in `.env.local`)
-   - (Recommended) **`NEXT_PUBLIC_APP_URL`** = your production URL (e.g. `https://hub.fihu.gr`) so links in emails point to the right place
+   - **`RESEND_API_KEY`** = your Resend API key (same value as in `.env.local`) — **required** for any approval emails.
+   - (Recommended) **`NEXT_PUBLIC_APP_URL`** = your production URL (e.g. `https://hub.fihu.gr`) so links in emails point to the right place.
+   - **`RESEND_FROM_EMAIL`** = `Formula IHU Hub <noreply@fihu.gr>` — **required to send to other recipients**. Without a verified-domain “from” address, Resend only allows sending to your own email (see [Troubleshooting](#you-can-only-send-testing-emails-to-your-own-email-address)).
 3. **Redeploy** the project (Deployments → … → Redeploy).
 
-If `RESEND_API_KEY` is missing on Vercel, the admin will see a warning after approving a user (“Approval email could not be sent…”). Password reset emails are sent by Supabase (SMTP in Dashboard); approval emails are sent by the app (Resend on Vercel).
+If `RESEND_API_KEY` is missing on Vercel, the admin will see a warning after approving a user (“Approval email could not be sent…”). If you see “You can only send testing emails to your own email address”, add `RESEND_API_KEY`, verify your domain at [resend.com/domains](https://resend.com/domains), then set `RESEND_FROM_EMAIL` and redeploy.
 
 ---
 
@@ -161,10 +162,32 @@ This keeps the same branded layout and logo and can help with deliverability (cl
 
 ## 🔍 Troubleshooting
 
+### "You can only send testing emails to your own email address"
+This means Resend is in **testing mode**: with the default sender (`onboarding@resend.dev`) you can only send to the email on your Resend account (e.g. antonis.ntwnas@gmail.com). To send approval emails to **any** user:
+
+1. **Set `RESEND_API_KEY` in Vercel**  
+   Vercel → your project → **Settings** → **Environment Variables** → add `RESEND_API_KEY` (same value as in `.env.local`) → **Redeploy**.
+
+2. **Verify a domain and set the "from" address**  
+   - Go to [resend.com/domains](https://resend.com/domains), add and verify your domain (e.g. `fihu.gr`) using the DNS records Resend provides.  
+   - In **Vercel** (Environment Variables), add:  
+     **`RESEND_FROM_EMAIL`** = `Formula IHU Hub <noreply@fihu.gr>`  
+     (use an address on your verified domain).  
+   - Redeploy. After this, approval emails can be sent to any recipient.
+
+Until the domain is verified, approval emails will only work when the approved user’s email is the same as your Resend account email.
+
+### "Invalid \`from\` field" / format error
+Resend requires the sender to be exactly one of:
+- `email@example.com`
+- `Name <email@example.com>`
+
+In Vercel, set **`RESEND_FROM_EMAIL`** to one of those (e.g. `Formula IHU Hub <noreply@fihu.gr>`). Do not omit the angle brackets around the address when using a name. The app will try to fix common mistakes (e.g. `Formula IHU Hub noreply@fihu.gr` → `Formula IHU Hub <noreply@fihu.gr>`).
+
 ### Emails not sending?
 1. **Password reset / auth emails:** Configure Custom SMTP in **Supabase Dashboard** (Authentication → SMTP) — the repo’s `config.toml` does not apply to Supabase Cloud.
 2. **Approval emails:** Add `RESEND_API_KEY` in **Vercel** (Settings → Environment Variables) and redeploy.
-3. Check domain is verified in [Resend Dashboard](https://resend.com/domains) if using a custom sender (e.g. `noreply@fihu.gr`); otherwise use the default `onboarding@resend.dev`.
+3. Check domain is verified in [Resend Dashboard](https://resend.com/domains) if using a custom sender (e.g. `noreply@fihu.gr`); otherwise Resend only allows sending to your own email (see above).
 4. Verify DNS records (SPF, DKIM) if using a custom domain.
 5. Check Resend dashboard for delivery/error messages.
 6. Try port 587 if 465 doesn't work (change in config.toml for local, or in Supabase SMTP for cloud).

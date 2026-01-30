@@ -7,9 +7,23 @@
 import { Resend } from 'resend'
 
 const resendApiKey = process.env.RESEND_API_KEY
-// Default uses Resend's test sender; for custom domain set RESEND_FROM_EMAIL after verifying domain in Resend
-const fromEmail =
-  process.env.RESEND_FROM_EMAIL || 'Formula IHU Hub <onboarding@resend.dev>'
+
+/** Resend accepts "email@example.com" or "Name <email@example.com>". Normalize env value to avoid "Invalid from field". */
+function normalizeFromEmail(raw: string | undefined): string {
+  const defaultFrom = 'Formula IHU Hub <onboarding@resend.dev>'
+  let s = (raw ?? '').trim().replace(/^["']|["']$/g, '')
+  if (!s) return defaultFrom
+  // Already "Name <email@domain>" or "email@domain"
+  if (/^[^<]+<[^>]+@[^>]+>$/.test(s) || /^[^\s]+@[^\s]+$/.test(s)) return s
+  // "Name email@domain" (missing brackets) -> "Name <email@domain>"
+  const match = s.match(/^(.+?)\s+([^\s]+@[^\s]+)$/)
+  if (match) return `${match[1].trim()} <${match[2]}>`
+  // Bare email
+  if (/^[^\s]+@[^\s]+$/.test(s)) return `Formula IHU Hub <${s}>`
+  return defaultFrom
+}
+
+const fromEmail = normalizeFromEmail(process.env.RESEND_FROM_EMAIL)
 
 function getResend() {
   if (!resendApiKey) return null
