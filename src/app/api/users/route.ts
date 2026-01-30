@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { Database } from '@/lib/types/database'
+import { UserRole } from '@/lib/types/database'
 
 type ProfileRole = {
   app_role: string
 }
 
+type UserRoleEnum = Database['public']['Enums']['user_role']
+const validRoles: UserRoleEnum[] = Object.values(UserRole) as UserRoleEnum[]
+
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies })
+    const supabase = await createServerSupabase()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -24,7 +27,8 @@ export async function GET(request: NextRequest) {
       .single() as { data: ProfileRole | null }
 
     const { searchParams } = new URL(request.url)
-    const role = searchParams.get('role')
+    const roleParam = searchParams.get('role')
+    const role: UserRoleEnum | null = roleParam && validRoles.includes(roleParam as UserRoleEnum) ? (roleParam as UserRoleEnum) : null
 
     let query = supabase
       .from('user_profiles')

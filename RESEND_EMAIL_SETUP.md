@@ -23,15 +23,17 @@ There are **two separate email systems**. Both must be configured.
 4. Go to **Authentication** → **URL Configuration** → **Redirect URLs** and add:
    - `https://your-production-domain.com/auth/reset-password` (replace with your real app URL, e.g. `https://formula-ihu-hub.vercel.app/auth/reset-password`)
 
-### 2. Vercel (required for “Account approved” and any app-sent emails)
+### 2. Vercel (required for “Account approved” / new user notification emails)
+
+When an admin approves a new user, the app sends an “account approved” email via Resend. This only works if Resend is configured on Vercel:
 
 1. Go to [Vercel](https://vercel.com) → your project → **Settings** → **Environment Variables**.
 2. Add:
-   - `RESEND_API_KEY` = your Resend API key (same value as in `.env.local`)
-   - (Recommended) `NEXT_PUBLIC_APP_URL` = your production URL (e.g. `https://formula-ihu-hub.vercel.app`) so links in emails point to the right place
-3. Redeploy the project (Deployments → … → Redeploy).
+   - **`RESEND_API_KEY`** = your Resend API key (same value as in `.env.local`)
+   - (Recommended) **`NEXT_PUBLIC_APP_URL`** = your production URL (e.g. `https://hub.fihu.gr`) so links in emails point to the right place
+3. **Redeploy** the project (Deployments → … → Redeploy).
 
-After that, password reset emails are sent by Supabase via Resend, and approval emails are sent by the app via Resend.
+If `RESEND_API_KEY` is missing on Vercel, the admin will see a warning after approving a user (“Approval email could not be sent…”). Password reset emails are sent by Supabase (SMTP in Dashboard); approval emails are sent by the app (Resend on Vercel).
 
 ---
 

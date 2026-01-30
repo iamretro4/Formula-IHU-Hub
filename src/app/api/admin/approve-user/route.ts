@@ -1,10 +1,10 @@
 // Only admins can approve or reject user login requests.
 // Optionally approve a user as team leader (if they registered as team captain).
-// Sends an email to the user when their account is approved (if Resend is configured).
+// Sends an email to the user when their account is approved (requires RESEND_API_KEY on Vercel).
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { Database } from '@/lib/types/database'
 import { sendApprovalEmail } from '@/lib/email'
 
@@ -24,7 +24,7 @@ type ApproveUserUpdates = {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies })
+    const supabase = await createServerSupabase()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
@@ -68,7 +68,6 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await supabase
       .from('user_profiles')
-      // @ts-expect-error - Supabase client infers update() param as never with createRouteHandlerClient
       .update(updates)
       .eq('id', userId)
 
@@ -82,15 +81,31 @@ export async function POST(request: NextRequest) {
 
     // Notify user by email when approved (non-blocking; approval already succeeded)
     let emailSent = false
-    if (loginApproved && targetProfile.email) {
-      const result = await sendApprovalEmail({
-        to: targetProfile.email,
-        firstName: targetProfile.first_name ?? '',
-        isTeamLeader: updates.app_role === 'team_leader',
-      })
-      emailSent = result.ok
-      if (!result.ok) {
-        console.warn('[approve-user] Approval email failed:', result.error)
+    let emailError: string | null = null
+    if (loginApproved) {
+      let toEmail = (targetProfile.email ?? '').trim()
+      if (!toEmail) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+        if (supabaseUrl && serviceRoleKey) {
+          const admin = createClient(supabaseUrl, serviceRoleKey)
+          const { data: authUser } = await admin.auth.admin.getUserById(userId)
+          toEmail = (authUser?.user?.email ?? '').trim()
+        }
+      }
+      if (toEmail) {
+        const result = await sendApprovalEmail({
+          to: toEmail,
+          firstName: targetProfile.first_name ?? '',
+          isTeamLeader: updates.app_role === 'team_leader',
+        })
+        emailSent = result.ok
+        if (!result.ok) {
+          emailError = result.error
+          console.warn('[approve-user] Approval email failed:', result.error)
+        }
+      } else {
+        emailError = 'No email address for user (profile or auth)'
       }
     }
 
@@ -99,6 +114,7 @@ export async function POST(request: NextRequest) {
       login_approved: updates.login_approved,
       app_role: updates.app_role ?? targetProfile.app_role,
       email_sent: emailSent,
+      email_error: emailError ?? undefined,
     })
   } catch (error) {
     console.error('Approve user error:', error)

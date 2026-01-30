@@ -469,6 +469,11 @@ export default function UserManagementPage() {
         return
       }
       toast.success(approveAsTeamLeader ? 'User approved as team leader' : 'User approved')
+      if (data.email_sent === false && data.email_error) {
+        toast.error(`Approval email could not be sent: ${data.email_error}. Set RESEND_API_KEY in Vercel for notification emails.`, { duration: 6000 })
+      } else if (data.email_sent === false) {
+        toast.error('Approval email could not be sent. Set RESEND_API_KEY in Vercel (Settings → Environment Variables) for notification emails.', { duration: 5000 })
+      }
       await loadData(true)
     } catch (e) {
       toast.error('Failed to approve user')

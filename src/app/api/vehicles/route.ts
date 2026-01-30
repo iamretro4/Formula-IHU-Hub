@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { Database } from '@/lib/types/database'
 import { vehicleSchema } from '@/lib/validators'
 
@@ -11,7 +10,7 @@ type ProfileWithTeam = {
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies })
+    const supabase = await createServerSupabase()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -30,7 +29,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status')
     const teamId = searchParams.get('teamId')
 
-    let query = supabase
+    // vehicles table exists in DB but may be missing from generated Database types
+    let query = (supabase as any)
       .from('vehicles')
       .select('*, teams(id, name, code, country)')
 
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies })
+    const supabase = await createServerSupabase()
     
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
@@ -92,6 +92,8 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single() as { data: ProfileWithTeam | null }
 
+    // vehicles table exists in DB but may be missing from generated Database types
+    const vehiclesSupabase = supabase as any
     // Only team users and admins can create vehicles
     if (profile?.app_role !== 'admin' && 
         profile?.app_role !== 'team_leader' && 
@@ -127,7 +129,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const insertResult = await supabase
+    const insertResult = await (supabase as any)
       .from('vehicles')
       .insert({
         ...validatedData,

@@ -78,9 +78,8 @@ type DocumentSpec = {
 const documents: DocumentSpec[] = [
   { key: 'bpefs', label: 'Business Plan Executive & Financial Summary (BPEFS)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '' },
   { key: 'tvsd', label: 'Technical Vehicle System Documentation (TVSD)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
-  { key: 'esoq', label: 'Electrical System Officer Qualification (ESOQ)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '02/06/2026 23:59:59', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
-  { key: 'tmd', label: 'Team Member Designation (TMD)', classes: ['EV', 'CV'], allowedTypes: [], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: '', fileSize: '' },
-  { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: ['text/plain'], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: 'Youtube Link', fileSize: '50MB' },
+  { key: 'esoq', label: 'Electrical System Officer Qualification (ESOQ)', classes: ['EV'], allowedTypes: ['application/pdf'], deadline: '02/06/2026 23:59:59', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
+  { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: [], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: 'YouTube link', fileSize: '—' },
   { key: 'crd', label: 'Cost Report Documents (CRD)', classes: ['EV', 'CV'], allowedTypes: ['application/zip'], deadline: '15/07/2026 23:59:59', submission: 'Formula IHU Portal', format: '.zip', fileSize: '50MB' },
 ]
 
@@ -127,6 +126,8 @@ export default function DashboardPage() {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [vsvLinkUrl, setVsvLinkUrl] = useState('');
+  const [vsvSaving, setVsvSaving] = useState(false);
 
   // Redirect if not authenticated - but wait for AuthContext to finish loading
   useEffect(() => {
@@ -318,6 +319,44 @@ export default function DashboardPage() {
     }
   }
 
+  async function saveVsvLink() {
+    const url = vsvLinkUrl.trim();
+    if (!url) {
+      toast.error('Please enter a YouTube link');
+      return;
+    }
+    if (!supabase || !user || !profile?.team_id) {
+      toast.error('Unable to save: missing session or team');
+      return;
+    }
+    setVsvSaving(true);
+    const saveToast = toast.loading('Saving YouTube link...');
+    try {
+      const { error } = await supabase.from('team_uploads' as any).upsert(
+        {
+          team_id: profile.team_id,
+          uploaded_by: user.id,
+          document_key: 'vsv',
+          file_name: url,
+          storage_path: `${profile.team_id}/vsv/link`,
+          uploaded_at: new Date().toISOString(),
+        } as any,
+        { onConflict: 'team_id,document_key' }
+      );
+      if (error) {
+        toast.error(`Failed to save link: ${error.message}`, { id: saveToast });
+      } else {
+        toast.success('YouTube link saved', { id: saveToast });
+        setVsvLinkUrl('');
+        await fetchUploadedFiles(profile.team_id);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save link', { id: saveToast });
+    } finally {
+      setVsvSaving(false);
+    }
+  }
+
   async function downloadFile(storagePath: string) {
     if (!supabase) {
       toast.error('Connection not available');
@@ -445,14 +484,22 @@ export default function DashboardPage() {
                     >
                       <td className="px-4 py-3 font-medium text-gray-900">{doc.label}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center justify-center text-primary" title="Expert Verification">
-                          <CheckCircle2 className="w-5 h-5" />
-                        </span>
+                        {doc.classes.includes('EV') ? (
+                          <span className="inline-flex items-center justify-center text-primary" title="EV">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-flex items-center justify-center text-primary" title="Committee Verification">
-                          <CheckCircle2 className="w-5 h-5" />
-                        </span>
+                        {doc.classes.includes('CV') ? (
+                          <span className="inline-flex items-center justify-center text-primary" title="CV">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </span>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-gray-700">{doc.deadline}</td>
                       <td className="px-4 py-3">
@@ -485,15 +532,16 @@ export default function DashboardPage() {
                 const isDraggedOver = dragOver === doc.key;
                 const fileInputId = `file-input-${doc.key}`;
                 
+                const isVsv = doc.key === 'vsv';
                 return (
                   <Card 
                     key={doc.key} 
                     className={`transition-all duration-300 hover:shadow-lg hover:scale-[1.02] ${
-                      isDraggedOver ? 'ring-2 ring-primary ring-offset-2 bg-primary/5 scale-[1.02]' : ''
+                      !isVsv && isDraggedOver ? 'ring-2 ring-primary ring-offset-2 bg-primary/5 scale-[1.02]' : ''
                     } ${uploaded ? 'border-green-300 bg-green-50/50 shadow-sm' : 'border-gray-200'}`}
-                    onDragOver={(e) => handleDragOver(e, doc.key)}
-                    onDragLeave={handleDragLeave}
-                    onDrop={(e) => handleDrop(e, doc.key)}
+                    onDragOver={isVsv ? undefined : (e) => handleDragOver(e, doc.key)}
+                    onDragLeave={isVsv ? undefined : handleDragLeave}
+                    onDrop={isVsv ? undefined : (e) => handleDrop(e, doc.key)}
                   >
                     <CardHeader className="pb-3">
                       <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -506,104 +554,132 @@ export default function DashboardPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {/* File Input Area */}
-                      <div className="space-y-3">
-                        <label
-                          htmlFor={fileInputId}
-                          className={`
-                            relative flex flex-col items-center justify-center w-full h-32 
-                            border-2 border-dashed rounded-lg cursor-pointer
-                            transition-all duration-200
-                            ${isDraggedOver 
-                              ? 'border-primary bg-primary/5' 
-                              : file 
-                                ? 'border-green-300 bg-green-50' 
-                                : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                            }
-                            ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
-                          `}
-                        >
+                      {isVsv ? (
+                        /* VSV: YouTube link input */
+                        <div className="space-y-3">
                           <input
-                            id={fileInputId}
-                            type="file"
-                            disabled={isUploading}
-                            accept={doc.allowedTypes.length > 0 ? doc.allowedTypes.join(',') : undefined}
-                            onChange={e => handleFileChange(e, doc.key)}
-                            className="hidden"
+                            type="url"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={vsvLinkUrl}
+                            onChange={e => setVsvLinkUrl(e.target.value)}
+                            disabled={vsvSaving}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                           />
-                          {file ? (
-                            <div className="flex flex-col items-center gap-2">
-                              {getFileIcon(file.name)}
-                              <span className="text-sm font-medium text-gray-700 text-center px-2 truncate max-w-full">
-                                {file.name}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {formatFileSize(file.size)}
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center gap-2">
-                              <Upload className={`w-8 h-8 ${isDraggedOver ? 'text-primary' : 'text-gray-400'}`} />
-                              <div className="text-center">
-                                <span className="text-sm font-medium text-gray-700">
-                                  Click to upload or drag and drop
-                                </span>
-                                {doc.allowedTypes.length > 0 && (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    Accepted: {doc.allowedTypes.map(t => t.split('/').pop()).join(', ')}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </label>
-
-                        {/* Upload Button */}
-                        <Button
-                          disabled={isUploading}
-                          onClick={() => {
-                            if (!file) {
-                              // If no file selected, trigger file input
-                              document.getElementById(fileInputId)?.click();
-                            } else {
-                              // If file selected, upload it
-                              uploadFile(doc.key);
-                            }
-                          }}
-                          className="w-full"
-                          variant={uploaded ? "outline" : file ? "default" : "secondary"}
-                        >
-                          {isUploading ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Uploading...
-                            </>
-                          ) : file ? (
-                            <>
-                              <Upload className="w-4 h-4" />
-                              Upload File
-                            </>
-                          ) : (
-                            <>
-                              <File className="w-4 h-4" />
-                              Select File
-                            </>
-                          )}
-                        </Button>
-
-                        {/* Remove File Button */}
-                        {file && !isUploading && (
                           <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setUploadFiles(f => ({ ...f, [doc.key]: null }))}
-                            className="w-full text-gray-600 hover:text-red-600"
+                            disabled={vsvSaving || !vsvLinkUrl.trim()}
+                            onClick={saveVsvLink}
+                            className="w-full"
+                            variant="default"
                           >
-                            <X className="w-4 h-4" />
-                            Remove File
+                            {vsvSaving ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Save YouTube link
+                              </>
+                            )}
                           </Button>
-                        )}
-                      </div>
+                        </div>
+                      ) : (
+                        /* File Input Area */
+                        <div className="space-y-3">
+                          <label
+                            htmlFor={fileInputId}
+                            className={`
+                              relative flex flex-col items-center justify-center w-full h-32 
+                              border-2 border-dashed rounded-lg cursor-pointer
+                              transition-all duration-200
+                              ${isDraggedOver 
+                                ? 'border-primary bg-primary/5' 
+                                : file 
+                                  ? 'border-green-300 bg-green-50' 
+                                  : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+                              }
+                              ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
+                            `}
+                          >
+                            <input
+                              id={fileInputId}
+                              type="file"
+                              disabled={isUploading}
+                              accept={doc.allowedTypes.length > 0 ? doc.allowedTypes.join(',') : undefined}
+                              onChange={e => handleFileChange(e, doc.key)}
+                              className="hidden"
+                            />
+                            {file ? (
+                              <div className="flex flex-col items-center gap-2">
+                                {getFileIcon(file.name)}
+                                <span className="text-sm font-medium text-gray-700 text-center px-2 truncate max-w-full">
+                                  {file.name}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {formatFileSize(file.size)}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center gap-2">
+                                <Upload className={`w-8 h-8 ${isDraggedOver ? 'text-primary' : 'text-gray-400'}`} />
+                                <div className="text-center">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    Click to upload or drag and drop
+                                  </span>
+                                  {doc.allowedTypes.length > 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      Accepted: {doc.allowedTypes.map(t => t.split('/').pop()).join(', ')}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </label>
+
+                          <Button
+                            disabled={isUploading}
+                            onClick={() => {
+                              if (!file) {
+                                document.getElementById(fileInputId)?.click();
+                              } else {
+                                uploadFile(doc.key);
+                              }
+                            }}
+                            className="w-full"
+                            variant={uploaded ? "outline" : file ? "default" : "secondary"}
+                          >
+                            {isUploading ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Uploading...
+                              </>
+                            ) : file ? (
+                              <>
+                                <Upload className="w-4 h-4" />
+                                Upload File
+                              </>
+                            ) : (
+                              <>
+                                <File className="w-4 h-4" />
+                                Select File
+                              </>
+                            )}
+                          </Button>
+
+                          {file && !isUploading && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setUploadFiles(f => ({ ...f, [doc.key]: null }))}
+                              className="w-full text-gray-600 hover:text-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                              Remove File
+                            </Button>
+                          )}
+                        </div>
+                      )}
 
                       {/* Uploaded File Display */}
                       {uploaded && (
@@ -613,21 +689,33 @@ export default function DashboardPage() {
                               <FileCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium text-gray-900 truncate">
-                                  {uploaded.file_name}
+                                  {isVsv ? uploaded.file_name : uploaded.file_name}
                                 </p>
                                 <p className="text-xs text-gray-500">
-                                  Uploaded {new Date(uploaded.uploaded_at).toLocaleDateString()}
+                                  {isVsv ? 'Link saved' : 'Uploaded'} {new Date(uploaded.uploaded_at).toLocaleDateString()}
                                 </p>
                               </div>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => downloadFile(uploaded.storage_path)}
-                              className="flex-shrink-0"
-                            >
-                              <Download className="w-4 h-4" />
-                            </Button>
+                            {isVsv ? (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => window.open(uploaded.file_name, '_blank', 'noopener,noreferrer')}
+                                className="flex-shrink-0"
+                                title="Open link"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => downloadFile(uploaded.storage_path)}
+                                className="flex-shrink-0"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       )}

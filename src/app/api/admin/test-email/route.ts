@@ -1,9 +1,7 @@
 // Admin-only: send a test email to verify Resend is configured.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { Database } from '@/lib/types/database'
+import { createServerSupabase } from '@/lib/supabase/server'
 import { sendTestEmail } from '@/lib/email'
 
 function isValidEmail(s: string): boolean {
@@ -12,7 +10,7 @@ function isValidEmail(s: string): boolean {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createRouteHandlerClient<Database>({ cookies })
+    const supabase = await createServerSupabase()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
