@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Database } from '@/lib/types/database'
 import { useForm, SubmitHandler } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -101,10 +102,18 @@ type ScoringFormData = z.infer<typeof scoringFormSchema>;
 
 export default function BusinessPlanScore() {
   const params = useParams<{ bookingId: string }>()
+  const router = useRouter()
+  const { profile: authProfile } = useAuth()
   const paramBookingId = params?.bookingId
   const supabase = useMemo(() => getSupabaseClient(), [])
   const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
+
+  // Temporarily admin-only
+  useEffect(() => {
+    if (authProfile === undefined) return
+    if (authProfile?.app_role !== 'admin') router.replace('/dashboard')
+  }, [authProfile, router])
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
   const [criteria, setCriteria] = useState<JudgedEventCriterion[]>([])
   const [submittedScores, setSubmittedScores] = useState<JudgedEventScore[]>([])
@@ -444,6 +453,17 @@ export default function BusinessPlanScore() {
       default: return 'outline';
     }
   };
+
+  if (authProfile === undefined || authProfile?.app_role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

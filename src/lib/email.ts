@@ -1,11 +1,13 @@
 /**
  * Email utilities using Resend.
- * Requires RESEND_API_KEY in env. Optional: RESEND_FROM_EMAIL (e.g. "Formula IHU Hub <noreply@yourdomain.com>").
+ * Requires RESEND_API_KEY in env (set in Vercel for production).
+ * Optional: RESEND_FROM_EMAIL (e.g. "Formula IHU Hub <noreply@fihu.gr>") — only use after verifying the domain in Resend.
  */
 
 import { Resend } from 'resend'
 
 const resendApiKey = process.env.RESEND_API_KEY
+// Default uses Resend's test sender; for custom domain set RESEND_FROM_EMAIL after verifying domain in Resend
 const fromEmail =
   process.env.RESEND_FROM_EMAIL || 'Formula IHU Hub <onboarding@resend.dev>'
 
@@ -81,6 +83,57 @@ export async function sendApprovalEmail(
   }
 }
 
+/**
+ * Sends a simple test email to verify Resend is configured.
+ * Returns { ok: true } on success, { ok: false, error } on failure.
+ */
+export async function sendTestEmail(to: string): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
+  const client = getResend()
+  if (!client) {
+    return { ok: false, error: 'RESEND_API_KEY is not configured' }
+  }
+
+  const subject = 'Formula IHU Hub – test email'
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test email</title>
+</head>
+<body style="font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; color: #1f2937; max-width: 560px; margin: 0 auto; padding: 24px;">
+  <h1 style="color: #111827; font-size: 1.5rem; margin-bottom: 16px;">Test email</h1>
+  <p>This is a test email from Formula IHU Hub.</p>
+  <p>If you received this, the app’s email integration (Resend) is working.</p>
+  <p style="margin-top: 24px; font-size: 0.875rem; color: #6b7280;">
+    Sent at ${escapeHtml(new Date().toISOString())}
+  </p>
+</body>
+</html>
+`.trim()
+
+  try {
+    const { error } = await client.emails.send({
+      from: fromEmail,
+      to: [to],
+      subject,
+      html,
+    })
+    if (error) {
+      console.error('[email] Resend test error:', error)
+      return { ok: false, error: error.message || 'Failed to send email' }
+    }
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to send email'
+    console.error('[email] Send test exception:', err)
+    return { ok: false, error: message }
+  }
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -91,9 +144,12 @@ function escapeHtml(s: string): string {
 }
 
 function getSignInUrl(): string {
-  const base = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-  if (base) {
-    const origin = base.startsWith('http') ? base : `https://${base}`
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    process.env.VERCEL_URL
+  if (base && base.trim()) {
+    const origin = base.trim().startsWith('http') ? base.trim() : `https://${base.trim()}`
     return `${origin}/auth/signin`
   }
   return '/auth/signin'

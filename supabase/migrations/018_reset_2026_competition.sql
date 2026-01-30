@@ -3,6 +3,10 @@
 -- then seed 2026 teams.
 -- Admin preserved: antonis.ntwnas@gmail.com
 -- Migration: 018_reset_2026_competition.sql
+--
+-- NOTE: This only deletes from public tables (e.g. user_profiles).
+-- To allow deleted emails to sign up again, also run migration
+-- 019_clean_auth_users_after_reset.sql (cleans auth.users).
 -- =====================================================
 
 DO $$

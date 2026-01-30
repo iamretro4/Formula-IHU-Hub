@@ -30,7 +30,9 @@ import {
   AlertTriangle,
   ArrowRight,
   UserCheck,
-  Scale
+  Scale,
+  Mail,
+  Send
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { logger } from '@/lib/utils/logger'
@@ -74,6 +76,8 @@ export default function AdminPanelPage() {
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([])
   const [userRole, setUserRole] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [testEmailTo, setTestEmailTo] = useState('')
+  const [testEmailLoading, setTestEmailLoading] = useState(false)
 
   const loadData = useCallback(async (isRefresh = false) => {
     const currentRunId = ++effectRunIdRef.current
@@ -214,6 +218,28 @@ export default function AdminPanelPage() {
 
   const handleRefresh = () => {
     loadData(true)
+  }
+
+  const handleSendTestEmail = async () => {
+    setTestEmailLoading(true)
+    try {
+      const res = await fetch('/api/admin/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testEmailTo.trim() || undefined }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to send test email')
+        return
+      }
+      toast.success(data.to ? `Test email sent to ${data.to}` : 'Test email sent to your account email')
+      setTestEmailTo('')
+    } catch {
+      toast.error('Failed to send test email')
+    } finally {
+      setTestEmailLoading(false)
+    }
   }
 
   if (loading) {
@@ -500,6 +526,43 @@ export default function AdminPanelPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Test email */}
+      <Card className="shadow-lg border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-gray-200">
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="w-5 h-5" />
+            Test email
+          </CardTitle>
+          <CardDescription>
+            Send a test email to verify Resend is configured (approval emails, etc.). Leave empty to send to your account email.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="email"
+              value={testEmailTo}
+              onChange={(e) => setTestEmailTo(e.target.value)}
+              placeholder="email@example.com (optional)"
+              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+              disabled={testEmailLoading}
+            />
+            <Button
+              onClick={handleSendTestEmail}
+              disabled={testEmailLoading}
+              className="gap-2 shrink-0"
+            >
+              {testEmailLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              Send test email
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
       {recentActivities.length > 0 && (

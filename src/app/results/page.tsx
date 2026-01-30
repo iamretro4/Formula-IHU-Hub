@@ -1,6 +1,8 @@
 'use client'
 import React, { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -82,6 +84,8 @@ const EVENT_ICONS: Record<string, React.ReactNode> = {
 }
 
 export default function ResultsPage() {
+  const router = useRouter()
+  const { profile } = useAuth()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [overallEV, setOverallEV] = useState<OverallResult[]>([])
@@ -93,6 +97,14 @@ export default function ResultsPage() {
   const [activeDynCvTab, setActiveDynCvTab] = useState('acceleration')
   const [activeStaticEvTab, setActiveStaticEvTab] = useState('Design')
   const [activeStaticCvTab, setActiveStaticCvTab] = useState('Design')
+
+  // Temporarily admin-only
+  useEffect(() => {
+    if (profile === undefined) return
+    if (profile?.app_role !== 'admin') router.replace('/dashboard')
+  }, [profile, router])
+
+  const isAdmin = profile?.app_role === 'admin'
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
@@ -645,6 +657,15 @@ export default function ResultsPage() {
             })}
           </tbody>
         </table>
+      </div>
+    )
+  }
+
+  if (profile === undefined || !isAdmin) {
+    return (
+      <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto flex flex-col items-center justify-center min-h-[40vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-gray-600 font-medium">Loading...</p>
       </div>
     )
   }

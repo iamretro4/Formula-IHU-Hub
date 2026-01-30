@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Loader2, Download } from 'lucide-react'
@@ -20,9 +22,17 @@ type Result = {
 }
 
 export default function EngineeringDesignResultsPage() {
+  const router = useRouter()
+  const { profile } = useAuth()
   const supabase = getSupabaseClient()
   const [loading, setLoading] = useState(true)
   const [results, setResults] = useState<Result[]>([])
+
+  // Temporarily admin-only
+  useEffect(() => {
+    if (profile === undefined) return
+    if (profile?.app_role !== 'admin') router.replace('/dashboard')
+  }, [profile, router])
 
   useEffect(() => {
     async function fetchResults() {
@@ -80,6 +90,14 @@ export default function EngineeringDesignResultsPage() {
     } catch (error) {
       console.error('Error exporting results:', error)
     }
+  }
+
+  if (profile === undefined || profile?.app_role !== 'admin') {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    )
   }
 
   if (loading) {

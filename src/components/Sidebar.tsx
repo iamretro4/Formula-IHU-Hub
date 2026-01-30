@@ -31,7 +31,8 @@ const navConfig: NavSection[] = [
     label: '',
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-      { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" /> }
+      // Temporarily admin-only
+      { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" />, roles: ['admin'] }
     ]
   },
   {
@@ -48,22 +49,18 @@ const navConfig: NavSection[] = [
     labelRoles: ['admin', 'track_marshal', 'team_leader', 'viewer'],
     items: [
       { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
-      { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin', 'track_marshal', 'team_leader', 'viewer'] }
+      // Temporarily admin-only
+      { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin'] }
     ]
   },
   {
+    // Temporarily admin-only
     label: 'JUDGED EVENTS',
-    labelRoles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'bp_judge', 'cm_judge', 'team_leader', 'viewer'],
+    labelRoles: ['admin'],
     items: [
-      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />,
-        roles: ['admin', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'design_judge_overall', 'team_leader', 'viewer']
-      },
-      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />,
-        roles: ['admin', 'bp_judge', 'design_judge_overall', 'team_leader', 'viewer']
-      },
-      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />,
-        roles: ['admin', 'cm_judge', 'design_judge_overall', 'team_leader', 'viewer']
-      }
+      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin'] },
+      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin'] },
+      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />, roles: ['admin'] }
     ]
   },
   {

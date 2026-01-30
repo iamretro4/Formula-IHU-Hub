@@ -204,7 +204,11 @@ pass = "env(RESEND_API_KEY)"  # API key is stored in .env file
 admin_email = "noreply@fihu.gr"
 sender_name = "Formula IHU Hub"
 
-# Uncomment to customize email template
+# Custom email templates (local Supabase). For Supabase Cloud, paste the HTML in Dashboard → Authentication → Email Templates.
+[auth.email.template.recovery]
+subject = "Reset your password — Formula IHU Hub"
+content_path = "./supabase/templates/recovery.html"
+
 # [auth.email.template.invite]
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"

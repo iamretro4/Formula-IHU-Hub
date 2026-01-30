@@ -1,7 +1,9 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
+import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -98,10 +100,18 @@ function ErrorBoundary({ children }: { children: React.ReactNode }) {
 }
 
 export default function TrackLivePage() {
+  const router = useRouter()
+  const { profile: authProfile } = useAuth()
   const supabase = useMemo(() => getSupabaseClient(), [])
   const effectRunIdRef = useRef(0)
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
+
+  // Temporarily admin-only
+  useEffect(() => {
+    if (authProfile === undefined) return
+    if (authProfile?.app_role !== 'admin') router.replace('/dashboard')
+  }, [authProfile, router])
   const [teams, setTeams] = useState<Team[]>([])
   const [allRuns, setAllRuns] = useState<Run[]>([])
   const [stats, setStats] = useState({ 
@@ -367,6 +377,16 @@ export default function TrackLivePage() {
   )
 
   const activeEvent = DYNAMIC_EVENTS.find(e => e.key === activeTab)
+  const isAdmin = authProfile?.app_role === 'admin'
+
+  if (authProfile === undefined || !isAdmin) {
+    return (
+      <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto flex flex-col items-center justify-center min-h-[40vh]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-gray-600 font-medium">Loading...</p>
+      </div>
+    )
+  }
 
   return (
     <ErrorBoundary>
