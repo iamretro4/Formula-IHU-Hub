@@ -153,7 +153,7 @@ export function CreateVehicleModal({ isOpen, onClose }: CreateVehicleModalProps)
               type="text"
               {...register('chassisNumber')}
               className="form-input"
-              placeholder="LB-2024-001"
+              placeholder="LB-2026-001"
             />
           </div>
 
@@ -163,7 +163,7 @@ export function CreateVehicleModal({ isOpen, onClose }: CreateVehicleModalProps)
               type="number"
               {...register('year', { valueAsNumber: true })}
               className="form-input"
-              placeholder="2024"
+              placeholder="2026"
               min="2020"
               max="2030"
             />

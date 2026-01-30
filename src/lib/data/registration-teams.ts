@@ -1,5 +1,5 @@
 /**
- * Formula IHU registration team lists by category.
+ * Formula IHU 2026 competition – registration team lists by category.
  * Used to populate the signup team dropdown with Pre-Registered, Registered, Wild Card, and Waiting List options.
  */
 

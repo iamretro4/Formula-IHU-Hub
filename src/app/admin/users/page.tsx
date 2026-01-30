@@ -99,6 +99,7 @@ export default function UserManagementPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [teamFilter, setTeamFilter] = useState<string>('all')
+  const [approvalFilter, setApprovalFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<SortOption>('created_at')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [userRole, setUserRole] = useState<string | null>(null)
@@ -108,6 +109,7 @@ export default function UserManagementPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
+  const [approvingUserId, setApprovingUserId] = useState<string | null>(null)
 
   const loadData = useCallback(async (isRefresh = false) => {
     const currentRunId = ++effectRunIdRef.current
@@ -171,7 +173,7 @@ export default function UserManagementPage() {
         }
       }
 
-      // Load users based on role
+      // Load users based on role (include login_approved for admin approval UI)
       let usersQuery = supabase
         .from('user_profiles')
         .select(`
@@ -235,8 +237,12 @@ export default function UserManagementPage() {
       
       const matchesRole = roleFilter === 'all' || user.app_role === roleFilter
       const matchesTeam = teamFilter === 'all' || user.team_id === teamFilter
-      
-      return matchesSearch && matchesRole && matchesTeam
+      const matchesApproval =
+        approvalFilter === 'all' ||
+        (approvalFilter === 'pending' && (user as UserProfile).login_approved === false) ||
+        (approvalFilter === 'approved' && (user as UserProfile).login_approved !== false)
+
+      return matchesSearch && matchesRole && matchesTeam && matchesApproval
     })
 
     // Sort
@@ -275,19 +281,20 @@ export default function UserManagementPage() {
     })
 
     return filtered
-  }, [users, searchQuery, roleFilter, teamFilter, sortBy, sortDirection])
+  }, [users, searchQuery, roleFilter, teamFilter, approvalFilter, sortBy, sortDirection])
 
   const stats = useMemo(() => {
     const total = users.length
     const active = users.filter(u => u.profile_completed).length
     const incomplete = total - active
+    const pendingApproval = users.filter(u => !(u as UserProfile).login_approved).length
     const byRole = users.reduce((acc, u) => {
       const role = u.app_role || 'unknown'
       acc[role] = (acc[role] || 0) + 1
       return acc
     }, {} as Record<string, number>)
 
-    return { total, active, incomplete, byRole }
+    return { total, active, incomplete, pendingApproval, byRole }
   }, [users])
 
   const getRoleInfo = (role: string) => {
@@ -443,6 +450,56 @@ export default function UserManagementPage() {
     return []
   }
 
+  const handleApproveUser = async (userId: string, approveAsTeamLeader: boolean) => {
+    if (userRole !== 'admin') return
+    setApprovingUserId(userId)
+    try {
+      const res = await fetch('/api/admin/approve-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          loginApproved: true,
+          approveAsTeamLeader,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to approve user')
+        return
+      }
+      toast.success(approveAsTeamLeader ? 'User approved as team leader' : 'User approved')
+      await loadData(true)
+    } catch (e) {
+      toast.error('Failed to approve user')
+    } finally {
+      setApprovingUserId(null)
+    }
+  }
+
+  const handleRejectUser = async (userId: string) => {
+    if (userRole !== 'admin') return
+    setApprovingUserId(userId)
+    try {
+      const res = await fetch('/api/admin/approve-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, loginApproved: false }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to update user')
+        return
+      }
+      toast.success('Login request rejected')
+      await loadData(true)
+    } catch (e) {
+      toast.error('Failed to update user')
+    } finally {
+      setApprovingUserId(null)
+    }
+  }
+
   const handleSort = (column: SortOption) => {
     if (sortBy === column) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
@@ -549,6 +606,21 @@ export default function UserManagementPage() {
             </div>
           </CardContent>
         </Card>
+        {userRole === 'admin' && (
+          <Card className="shadow-md border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 mb-1">Pending Approval</p>
+                  <p className="text-3xl font-bold text-amber-600">{stats.pendingApproval}</p>
+                </div>
+                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
+                  <UserCheck className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         <Card className="shadow-md border-gray-200">
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
@@ -596,6 +668,18 @@ export default function UserManagementPage() {
                 ))}
               </SelectContent>
             </Select>
+            {userRole === 'admin' && (
+              <Select value={approvalFilter} onValueChange={setApprovalFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Login status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="pending">Pending approval</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             {userRole === 'admin' && (
               <Select value={teamFilter} onValueChange={setTeamFilter}>
                 <SelectTrigger>
@@ -710,6 +794,9 @@ export default function UserManagementPage() {
                         </button>
                       </th>
                     )}
+                    {userRole === 'admin' && (
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Login</th>
+                    )}
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
                     <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
                   </tr>
@@ -782,6 +869,20 @@ export default function UserManagementPage() {
                             )}
                           </td>
                         )}
+                        {userRole === 'admin' && (
+                          <td className="py-4 px-4">
+                            {user.login_approved !== false ? (
+                              <Badge className="bg-green-100 text-green-700 border-green-300">
+                                <CheckCircle2 className="w-3 h-3 mr-1 inline" />
+                                Approved
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-amber-100 text-amber-700 border-amber-300">
+                                Pending
+                              </Badge>
+                            )}
+                          </td>
+                        )}
                         <td className="py-4 px-4">
                           {user.profile_completed ? (
                             <Badge className="bg-green-100 text-green-700 border-green-300">
@@ -796,7 +897,60 @@ export default function UserManagementPage() {
                           )}
                         </td>
                         <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {userRole === 'admin' && user.login_approved === false && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleApproveUser(user.id, !!(user as UserProfile).team_lead)}
+                                  disabled={approvingUserId === user.id}
+                                  className="gap-1 bg-green-600 hover:bg-green-700"
+                                >
+                                  {approvingUserId === user.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <UserCheck className="w-4 h-4" />
+                                      {(user as UserProfile).team_lead ? 'Approve as leader' : 'Approve'}
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleRejectUser(user.id)}
+                                  disabled={approvingUserId === user.id}
+                                  className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                                >
+                                  {approvingUserId === user.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <UserX className="w-4 h-4" />
+                                      Reject
+                                    </>
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                            {userRole === 'admin' && user.login_approved !== false && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleRejectUser(user.id)}
+                                disabled={approvingUserId === user.id}
+                                className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
+                              >
+                                {approvingUserId === user.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <UserX className="w-4 h-4" />
+                                    Revoke
+                                  </>
+                                )}
+                              </Button>
+                            )}
                             {editingUserId === user.id ? (
                               <>
                                 <Button

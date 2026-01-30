@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
       // Upsert user profile from auth metadata
       const metadata = user.user_metadata as any
       
+      // Upsert profile from metadata; do not include login_approved or app_role so we do not overwrite admin-set values
       await supabase
         .from('user_profiles')
         .upsert({
@@ -37,7 +38,6 @@ export async function GET(request: NextRequest) {
           campsite_staying: metadata.campsite_staying || false,
           ehic_number: metadata.ehic_number || null,
           team_id: metadata.team_id || null,
-          app_role: metadata.app_role || 'viewer',
           profile_completed: false,
           university_name: metadata.university_name || null,
           faculty_advisor_name: metadata.faculty_advisor_name || null,

@@ -16,8 +16,8 @@ const inter = Inter({
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Scrutineer Hub - Formula Racing Scrutineering Platform',
-  description: 'Professional scrutineering platform for formula racing and EV competitions',
+  title: 'Scrutineer Hub - Formula IHU 2026 Scrutineering Platform',
+  description: 'Formula IHU 2026 – professional scrutineering platform for formula racing and EV competitions',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

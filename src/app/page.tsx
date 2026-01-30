@@ -132,7 +132,7 @@ export default function HomePage() {
         </div>
         
         <p className="text-sm text-gray-500 mt-8">
-          Formula IHU Scrutineering Platform
+          Formula IHU 2026 Scrutineering Platform
         </p>
       </div>
     </div>

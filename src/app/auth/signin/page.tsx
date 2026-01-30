@@ -95,6 +95,22 @@ export default function SignInPage() {
         return
       }
 
+      // Check if admin has approved this account (login_approved)
+      if (authData.session?.user) {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('login_approved')
+          .eq('id', authData.session.user.id)
+          .single() as { data: { login_approved: boolean } | null }
+        if (profile && profile.login_approved === false) {
+          await supabase.auth.signOut()
+          setError('Your account is pending admin approval. You will be able to sign in once an administrator approves your request.')
+          toast.error('Account pending approval')
+          setIsLoading(false)
+          return
+        }
+      }
+
       // If we have a session immediately, wait a moment for cookies to be set, then redirect
       if (authData.session) {
         redirectHandled.current = true

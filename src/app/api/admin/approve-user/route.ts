@@ -8,14 +8,18 @@ import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 import { sendApprovalEmail } from '@/lib/email'
 
-type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update']
-
 type ProfileRow = {
   app_role: string
   team_lead: boolean | null
   login_approved: boolean
   email?: string
   first_name?: string | null
+}
+
+/** Fields we update when approving a user (matches DB; type is local so build works even if generated types are stale). */
+type ApproveUserUpdates = {
+  login_approved: boolean
+  app_role?: 'team_leader'
 }
 
 export async function POST(request: NextRequest) {
@@ -55,7 +59,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'User not found' }, { status: 404 })
     }
 
-    const updates: UserProfileUpdate = {
+    const updates: ApproveUserUpdates = {
       login_approved: loginApproved,
     }
     if (loginApproved && approveAsTeamLeader && targetProfile.team_lead) {

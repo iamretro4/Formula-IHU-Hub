@@ -1305,6 +1305,7 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          login_approved: boolean
           phone: string
           profile_completed: boolean | null
           team_id: string | null
@@ -1327,6 +1328,7 @@ export type Database = {
           first_name: string
           id: string
           last_name: string
+          login_approved?: boolean
           phone: string
           profile_completed?: boolean | null
           team_id?: string | null
@@ -1349,6 +1351,7 @@ export type Database = {
           first_name?: string
           id?: string
           last_name?: string
+          login_approved?: boolean
           phone?: string
           profile_completed?: boolean | null
           team_id?: string | null
