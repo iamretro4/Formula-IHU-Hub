@@ -26,6 +26,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import toast from 'react-hot-toast'
 import { useAuth } from '@/hooks/useAuth'
+import { useTeamUploads, type UploadedFile } from '@/hooks/useTeamUploads'
+import { DASHBOARD_DOCUMENTS } from '@/lib/data/dashboard-documents'
+import { DocumentUploadTable } from './DocumentUploadTable'
 
 type Announcement = {
   id: number
@@ -45,44 +48,6 @@ type Stats = {
   activeSessions: number
 }
 
-type UserProfile = {
-  id: string
-  team_id: string | null
-  app_role: string | null
-  team?: {
-    vehicle_class: string
-  }
-}
-
-type UploadedFile = {
-  id: string
-  team_id: string
-  uploaded_by: string
-  document_key: string
-  file_name: string
-  storage_path: string
-  uploaded_at: string
-}
-
-type DocumentSpec = {
-  key: string
-  label: string
-  classes: string[]
-  allowedTypes: string[]
-  deadline: string
-  submission: string
-  format: string
-  fileSize: string
-}
-
-const documents: DocumentSpec[] = [
-  { key: 'bpefs', label: 'Business Plan Executive & Financial Summary (BPEFS)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '' },
-  { key: 'tvsd', label: 'Technical Vehicle System Documentation (TVSD)', classes: ['EV', 'CV'], allowedTypes: ['application/pdf'], deadline: '25/05/2026 14:00:00', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
-  { key: 'esoq', label: 'Electrical System Officer Qualification (ESOQ)', classes: ['EV'], allowedTypes: ['application/pdf'], deadline: '02/06/2026 23:59:59', submission: 'Formula IHU Portal', format: '.pdf', fileSize: '50MB' },
-  { key: 'vsv', label: 'Vehicle Status Video (VSV)', classes: ['EV', 'CV'], allowedTypes: [], deadline: '02/07/2026 23:59:59', submission: 'Formula IHU Portal', format: 'YouTube link', fileSize: '—' },
-  { key: 'crd', label: 'Cost Report Documents (CRD)', classes: ['EV', 'CV'], allowedTypes: ['application/zip'], deadline: '15/07/2026 23:59:59', submission: 'Formula IHU Portal', format: '.zip', fileSize: '50MB' },
-]
-
 const fetchAnnouncements = async (): Promise<Announcement[]> => [
   { id: 1, message: "Technical Inspection starts at 08:30." },
   { id: 2, message: "Driver's meeting at 09:00 near the paddock tent." },
@@ -101,10 +66,9 @@ function sanitizeFileName(name: string) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user: authUser, loading: authLoading } = useAuth();
+  const { user: authUser, profile: authProfile, loading: authLoading } = useAuth();
   const [supabase, setSupabase] = useState<ReturnType<typeof getSupabaseClient> | null>(null);
 
-  // Initialize supabase client safely
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -118,75 +82,25 @@ export default function DashboardPage() {
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [stats, setStats] = useState<Stats>({ teams: 37, vehicles: 20, events: 12, activeSessions: 4 });
 
-  // Upload-related state
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [teamClass, setTeamClass] = useState('EV');
   const [uploadFiles, setUploadFiles] = useState<Record<string, File | null>>({});
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [vsvLinkUrl, setVsvLinkUrl] = useState('');
   const [vsvSaving, setVsvSaving] = useState(false);
 
-  // Redirect if not authenticated - but wait for AuthContext to finish loading
+  const { uploadedFiles, teamClass, refetch: fetchUploadedFiles } = useTeamUploads(authProfile?.team_id ?? null, supabase);
+
   useEffect(() => {
     if (!authLoading && !authUser) {
-      // Redirect to signin if not authenticated
-      router.replace('/auth/signin')
+      router.replace('/auth/signin');
     }
-  }, [authUser, authLoading, router])
+  }, [authUser, authLoading, router]);
 
   useEffect(() => {
-    // Don't load data if not authenticated
     if (!authUser) return;
-
     fetchAnnouncements().then(setAnnouncements);
     fetchTodaysSchedule().then(setSchedule);
-    setStats({ teams: 37, vehicles: 20, events: 12, activeSessions: 4 });
-
-    // Use authUser directly instead of calling getUser again
-    setUser(authUser);
   }, [authUser]);
-
-  const fetchUploadedFiles = useCallback(async (teamId: string | null) => {
-    if (!teamId || !supabase) {
-      setUploadedFiles([]);
-      return;
-    }
-    try {
-      const { data } = await supabase
-        .from('team_uploads' as any)
-        .select('*, uploaded_by (first_name, last_name)')
-        .eq('team_id', teamId)
-        .order('uploaded_at', { ascending: false });
-      setUploadedFiles((data ?? []) as unknown as UploadedFile[]);
-    } catch (error) {
-      console.error('Error fetching uploaded files:', error);
-      setUploadedFiles([]);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    async function fetchProfileAndUploads() {
-      if (!user || !supabase) return;
-
-      try {
-        const { data } = await supabase
-          .from('user_profiles')
-          .select('*, team_id, team:teams(vehicle_class)')
-          .eq('id', user.id)
-          .single() as { data: any }
-
-        setProfile(data);
-        setTeamClass(data?.team?.vehicle_class ?? 'EV');
-        await fetchUploadedFiles(data?.team_id ?? null);
-      } catch (error) {
-        console.error('Error fetching profile:', error);
-      }
-    }
-    fetchProfileAndUploads();
-  }, [user, supabase, fetchUploadedFiles]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>, docKey: string) {
     const files = e.target.files;
@@ -236,7 +150,7 @@ export default function DashboardPage() {
   }
 
   async function uploadFile(docKey: string) {
-    if (!uploadFiles[docKey] || !profile?.team_id || !supabase) {
+    if (!uploadFiles[docKey] || !authProfile?.team_id || !supabase) {
       toast.error('Please select a file first');
       return;
     }
@@ -250,14 +164,14 @@ export default function DashboardPage() {
     }
 
     const file = uploadFiles[docKey]!;
-    const docSpec = documents.find(d => d.key === docKey);
+    const docSpec = DASHBOARD_DOCUMENTS.find(d => d.key === docKey);
     const maxBytes = docSpec?.fileSize === '50MB' ? 50 * 1024 * 1024 : undefined;
     if (maxBytes != null && file.size > maxBytes) {
       toast.error(`File size must be at most 50MB. Your file is ${formatFileSize(file.size)}.`);
       return;
     }
     const safeFileName = sanitizeFileName(file.name);
-    const path = `${profile.team_id}/${docKey}/${safeFileName}`;
+    const path = `${authProfile.team_id}/${docKey}/${safeFileName}`;
 
     setUploading(u => ({ ...u, [docKey]: true }));
     const uploadToast = toast.loading(`Uploading ${file.name}...`);
@@ -276,7 +190,7 @@ export default function DashboardPage() {
       }
 
       // Ensure we have a valid team_id
-      if (!profile.team_id) {
+      if (!authProfile.team_id) {
         toast.error('You must be assigned to a team to upload files', { id: uploadToast });
         setUploading(u => ({ ...u, [docKey]: false }));
         return;
@@ -284,8 +198,8 @@ export default function DashboardPage() {
 
               const { error: metaError } = await supabase.from('team_uploads' as any).upsert(
         {
-          team_id: profile.team_id,
-          uploaded_by: user.id,
+          team_id: authProfile.team_id,
+          uploaded_by: authUser!.id,
           document_key: docKey,
           file_name: file.name,
           storage_path: path,
@@ -298,14 +212,14 @@ export default function DashboardPage() {
         toast.error(`Metadata update failed: ${metaError.message}`, { id: uploadToast });
       } else {
         toast.success('Upload successful!', { id: uploadToast });
-        await fetchUploadedFiles(profile.team_id);
+        await fetchUploadedFiles();
         setUploadFiles(f => ({ ...f, [docKey]: null }));
         // Sync to Google Drive (fire-and-forget; each team has its own subfolder)
         fetch('/api/sync-upload-to-drive', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            team_id: profile.team_id,
+            team_id: authProfile.team_id,
             storage_path: path,
             file_name: file.name,
             document_key: docKey,
@@ -325,7 +239,7 @@ export default function DashboardPage() {
       toast.error('Please enter a YouTube link');
       return;
     }
-    if (!supabase || !user || !profile?.team_id) {
+    if (!supabase || !authUser || !authProfile?.team_id) {
       toast.error('Unable to save: missing session or team');
       return;
     }
@@ -334,11 +248,11 @@ export default function DashboardPage() {
     try {
       const { error } = await supabase.from('team_uploads' as any).upsert(
         {
-          team_id: profile.team_id,
-          uploaded_by: user.id,
+          team_id: authProfile.team_id,
+          uploaded_by: authUser!.id,
           document_key: 'vsv',
           file_name: url,
-          storage_path: `${profile.team_id}/vsv/link`,
+          storage_path: `${authProfile.team_id}/vsv/link`,
           uploaded_at: new Date().toISOString(),
         } as any,
         { onConflict: 'team_id,document_key' }
@@ -348,7 +262,7 @@ export default function DashboardPage() {
       } else {
         toast.success('YouTube link saved', { id: saveToast });
         setVsvLinkUrl('');
-        await fetchUploadedFiles(profile.team_id);
+        await fetchUploadedFiles();
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save link', { id: saveToast });
@@ -381,8 +295,8 @@ export default function DashboardPage() {
     return uploadedFiles.find(f => f.document_key === docKey) || null;
   }
 
-  const canUpload = user && (
-    !profile?.app_role || profile?.app_role === 'team_leader' || profile?.app_role === 'team_member' || profile?.app_role === 'admin'
+  const canUpload = authUser && (
+    !authProfile?.app_role || authProfile.app_role === 'team_leader' || authProfile.app_role === 'team_member' || authProfile.app_role === 'admin'
   );
 
   // Show loading or nothing if not authenticated
@@ -460,70 +374,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Document requirements table: Document | EV | CV | Deadline | Submission | Format | File Size */}
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50/80">
-                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Document</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-900">EV</th>
-                  <th className="px-4 py-3 text-center font-semibold text-gray-900">CV</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Deadline</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Submission</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-900">Format</th>
-                  <th className="px-4 py-3 text-left font-semibold text-gray-900">File Size</th>
-                </tr>
-              </thead>
-              <tbody>
-                {documents
-                  .filter(doc => !teamClass || doc.classes.includes(teamClass))
-                  .map((doc, idx) => (
-                    <tr
-                      key={doc.key}
-                      className={`border-b border-gray-100 last:border-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}
-                    >
-                      <td className="px-4 py-3 font-medium text-gray-900">{doc.label}</td>
-                      <td className="px-4 py-3 text-center">
-                        {doc.classes.includes('EV') ? (
-                          <span className="inline-flex items-center justify-center text-primary" title="EV">
-                            <CheckCircle2 className="w-5 h-5" />
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {doc.classes.includes('CV') ? (
-                          <span className="inline-flex items-center justify-center text-primary" title="CV">
-                            <CheckCircle2 className="w-5 h-5" />
-                          </span>
-                        ) : (
-                          <span className="text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{doc.deadline}</td>
-                      <td className="px-4 py-3">
-                        <a
-                          href="#"
-                          className="inline-flex items-center gap-1 text-primary hover:underline"
-                          onClick={(e) => { e.preventDefault(); }}
-                        >
-                          {doc.submission}
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      </td>
-                      <td className={`px-4 py-3 ${doc.format === '.pdf' ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
-                        {doc.format || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{doc.fileSize || '—'}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
+          <DocumentUploadTable documents={DASHBOARD_DOCUMENTS} teamClass={teamClass} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {documents
+            {DASHBOARD_DOCUMENTS
               .filter(doc => !teamClass || doc.classes.includes(teamClass))
               .map(doc => {
                 const uploaded = uploadedFile(doc.key);

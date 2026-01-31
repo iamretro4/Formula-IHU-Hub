@@ -36,7 +36,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { logger } from '@/lib/utils/logger'
-import { DateTime } from 'luxon'
+import { parseISO, differenceInMinutes, differenceInHours } from 'date-fns'
 
 type Stats = {
   totalUsers: number
@@ -383,17 +383,13 @@ export default function AdminPanelPage() {
   ]
 
   const formatTimeAgo = (timestamp: string) => {
-    const dt = DateTime.fromISO(timestamp)
-    const now = DateTime.now()
-    const diff = now.diff(dt, ['hours', 'minutes'])
-    
-    if (diff.hours >= 24) {
-      return `${Math.floor(diff.hours / 24)}d ago`
-    } else if (diff.hours >= 1) {
-      return `${Math.floor(diff.hours)}h ago`
-    } else {
-      return `${Math.floor(diff.minutes)}m ago`
-    }
+    const dt = parseISO(timestamp)
+    const now = new Date()
+    const minutes = differenceInMinutes(now, dt)
+    const hours = differenceInHours(now, dt)
+    if (hours >= 24) return `${Math.floor(hours / 24)}d ago`
+    if (hours >= 1) return `${hours}h ago`
+    return `${minutes}m ago`
   }
 
   return (

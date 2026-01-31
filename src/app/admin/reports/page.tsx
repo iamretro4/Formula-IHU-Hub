@@ -35,7 +35,7 @@ import {
 import { Database } from '@/lib/types/database'
 import toast from 'react-hot-toast'
 import { logger } from '@/lib/utils/logger'
-import { DateTime } from 'luxon'
+import { format } from 'date-fns'
 
 type UserProfile = {
   app_role: string
@@ -299,7 +299,7 @@ export default function SystemReportsPage() {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `system-report-${DateTime.now().toFormat('yyyy-MM-dd-HHmmss')}.csv`
+    a.download = `system-report-${format(new Date(), 'yyyy-MM-dd-HHmmss')}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)

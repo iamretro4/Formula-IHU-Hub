@@ -25,10 +25,9 @@ import {
   AlertTriangle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { DateTime } from 'luxon'
+import { addMinutes, parseISO, format } from 'date-fns'
+import { todayInEventTz } from '@/lib/utils/formatting'
 import { logger } from '@/lib/utils/logger'
-
-const EEST_ZONE = 'Europe/Athens'
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   Electrical: <Zap className="w-5 h-5" />,
@@ -110,7 +109,7 @@ export default function ScrutineeringBookPage() {
   const [notes, setNotes] = useState('')
   const [allBookings, setAllBookings] = useState<Booking[]>([])
   const supabase = useMemo(() => getSupabaseClient(), [])
-  const todayDate = DateTime.now().setZone(EEST_ZONE).toISODate() ?? new Date().toISOString().split('T')[0]
+  const todayDate = todayInEventTz()
   const adminViewTeamRef = useRef<string | null>(null)
   const effectRunIdRef = useRef(0)
 
@@ -495,12 +494,12 @@ export default function ScrutineeringBookPage() {
   }, [selectedInspectionType, supabase, todayDate, ok])
 
   function getSlots(startTime: string, endTime: string, duration: number) {
-    let slots: string[] = []
-    let curr = DateTime.fromISO(`${todayDate}T${startTime}:00`, { zone: EEST_ZONE })
-    const end = DateTime.fromISO(`${todayDate}T${endTime}:00`, { zone: EEST_ZONE })
-    while (curr.plus({ minutes: duration }) <= end) {
-      slots.push(curr.toFormat('HH:mm'))
-      curr = curr.plus({ minutes: duration })
+    const slots: string[] = []
+    let curr = parseISO(`${todayDate}T${startTime}:00`)
+    const end = parseISO(`${todayDate}T${endTime}:00`)
+    while (addMinutes(curr, duration) <= end) {
+      slots.push(format(curr, 'HH:mm'))
+      curr = addMinutes(curr, duration)
     }
     return slots
   }
@@ -580,9 +579,10 @@ export default function ScrutineeringBookPage() {
       }
 
       // Calculate end time
-      const endTime = DateTime.fromISO(`${todayDate}T${selectedTime}:00`, { zone: EEST_ZONE })
-        .plus({ minutes: selectedInspectionType?.duration_minutes ?? 120 })
-        .toFormat('HH:mm')
+      const endTime = format(
+        addMinutes(parseISO(`${todayDate}T${selectedTime}:00`), selectedInspectionType?.duration_minutes ?? 120),
+        'HH:mm'
+      )
 
       // Insert booking
       const bookingData = {

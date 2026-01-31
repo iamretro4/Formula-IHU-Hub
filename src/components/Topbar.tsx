@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, Fragment, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import {
@@ -16,7 +16,12 @@ import {
   Info,             // Info icon
   AlertTriangle     // Error icon
 } from 'lucide-react'
-import { Menu as HeadlessMenu, Transition } from '@headlessui/react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { useAuth } from '@/hooks/useAuth'
 import getSupabaseClient from '@/lib/supabase/client'
@@ -312,50 +317,45 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             </Popover>
 
             {/* User Menu */}
-            <HeadlessMenu as="div" className="relative">
-              <HeadlessMenu.Button className="flex items-center gap-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 transition-all duration-300 hover:bg-gray-50 p-1.5 group">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:ring-offset-2 transition-all duration-300 hover:bg-gray-50 p-1.5 group">
                 <div className="w-9 h-9 bg-gradient-to-br from-primary to-primary-600 rounded-full flex items-center justify-center border-2 border-primary/20 shadow-md group-hover:shadow-lg transition-all duration-300 group-hover:scale-110">
                   <span className="text-sm font-semibold text-white">
                     {profile?.first_name?.charAt(0) || user?.email?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-500 group-hover:text-gray-700 transition-colors hidden sm:block group-hover:rotate-180 duration-300" />
-              </HeadlessMenu.Button>
-              <Transition as={Fragment} enter="transition ease-out duration-200" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-150" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
-                <HeadlessMenu.Items className="absolute right-0 mt-2 w-64 origin-top-right bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden">
-                  <div className="py-1.5">
-                    <div className="px-4 py-3.5 text-sm border-b border-gray-100 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10">
-                      <p className="font-bold text-gray-900">{profile?.first_name || ''} {profile?.last_name || ''}</p>
-                      <p className="text-xs text-gray-600 mt-0.5 truncate">{user?.email || ''}</p>
-                      <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/80 rounded-md border border-gray-200 shadow-sm">
-                        <span className="text-xs text-gray-600 capitalize font-semibold">{userRole.replace(/_/g, ' ')}</span>
-                      </div>
-                    </div>
-                    <HeadlessMenu.Item>{({ active }) => (
-                      <button 
-                        onClick={() => router.push('/settings/profile')} 
-                        className={`${active ? 'bg-primary/10 text-primary' : 'text-gray-700'} flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm transition-all duration-200 hover:bg-primary/5`}
-                      >
-                        <UserCircle className="w-4 h-4" />
-                        <span className="font-medium">Profile Settings</span>
-                      </button>
-                    )}</HeadlessMenu.Item>
-                    <HeadlessMenu.Item>{({ active }) => (
-                      <button 
-                        onClick={signOutSupabase} 
-                        disabled={isLoggingOut}
-                        aria-label="Sign out"
-                        aria-busy={isLoggingOut}
-                        className={`${active ? 'bg-red-50 text-red-700' : 'text-gray-700'} ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''} flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm transition-all duration-200 hover:bg-red-50`}
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span className="font-medium">{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
-                      </button>
-                    )}</HeadlessMenu.Item>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 rounded-xl border-gray-200 shadow-2xl p-0 overflow-hidden">
+                <div className="px-4 py-3.5 text-sm border-b border-gray-100 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10">
+                  <p className="font-bold text-gray-900">{profile?.first_name || ''} {profile?.last_name || ''}</p>
+                  <p className="text-xs text-gray-600 mt-0.5 truncate">{user?.email || ''}</p>
+                  <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 bg-white/80 rounded-md border border-gray-200 shadow-sm">
+                    <span className="text-xs text-gray-600 capitalize font-semibold">{userRole.replace(/_/g, ' ')}</span>
                   </div>
-                </HeadlessMenu.Items>
-              </Transition>
-            </HeadlessMenu>
+                </div>
+                <div className="py-1.5">
+                  <DropdownMenuItem
+                    onClick={() => router.push('/settings/profile')}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer"
+                  >
+                    <UserCircle className="w-4 h-4" />
+                    <span className="font-medium">Profile Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={signOutSupabase}
+                    disabled={isLoggingOut}
+                    variant="destructive"
+                    aria-label="Sign out"
+                    aria-busy={isLoggingOut}
+                    className={`flex items-center gap-3 px-4 py-2.5 text-sm cursor-pointer ${isLoggingOut ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="font-medium">{isLoggingOut ? 'Signing out...' : 'Sign Out'}</span>
+                  </DropdownMenuItem>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>

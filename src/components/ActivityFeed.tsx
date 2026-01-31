@@ -1,11 +1,7 @@
 'use client'
 
 import { formatDistanceToNow } from 'date-fns'
-import {
-  ChatBubbleLeftIcon,
-  ClipboardDocumentCheckIcon,
-  UserGroupIcon,
-} from '@heroicons/react/24/outline'
+import { MessageSquare, ClipboardCheck, Users } from 'lucide-react'
 
 interface Activity {
   id: string
@@ -32,12 +28,12 @@ interface ActivityFeedProps {
 export function ActivityFeed({ activities }: ActivityFeedProps) {
   const getActivityIcon = (activity: Activity) => {
     if (activity.scrutineering) {
-      return ClipboardDocumentCheckIcon
+      return ClipboardCheck
     }
     if (activity.vehicle) {
-      return ChatBubbleLeftIcon
+      return MessageSquare
     }
-    return UserGroupIcon
+    return Users
   }
 
   const getActivityColor = (role: string) => {

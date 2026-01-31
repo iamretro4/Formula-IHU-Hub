@@ -7,12 +7,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
 import { signInSchema, SignInInput } from '@/lib/validators'
-import {
-  ClipboardDocumentCheckIcon,
-  EyeIcon,
-  EyeSlashIcon,
-} from '@heroicons/react/24/outline'
-import { Mail, Lock, LogIn, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Mail, Lock, LogIn, Loader2, AlertCircle, CheckCircle2, ClipboardCheck, Eye, EyeOff } from 'lucide-react'
 import getSupabaseClient, { hasSupabaseEnv } from '@/lib/supabase/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -174,7 +169,7 @@ export default function SignInPage() {
         <div className="text-center">
           <div className="mx-auto w-28 h-28 bg-white rounded-2xl flex items-center justify-center shadow-xl border border-gray-100 mb-6 p-3 transform hover:scale-105 transition-transform duration-300">
             {logoError ? (
-              <ClipboardDocumentCheckIcon className="w-12 h-12 text-primary" />
+              <ClipboardCheck className="w-12 h-12 text-primary" />
             ) : (
               <Image
                 src="/formula-ihu-logo.png"
@@ -271,9 +266,9 @@ export default function SignInPage() {
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
-                    <EyeSlashIcon className="w-5 h-5" />
+                    <EyeOff className="w-5 h-5" />
                   ) : (
-                    <EyeIcon className="w-5 h-5" />
+                    <Eye className="w-5 h-5" />
                   )}
                 </button>
               </div>

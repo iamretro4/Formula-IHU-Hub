@@ -24,6 +24,7 @@ type NavSection = {
   label: string
   items: NavItem[]
   labelRoles?: string[] // Roles that can see this section title
+  hideForRoles?: string[] // Roles that must not see this section at all
 }
 
 const navConfig: NavSection[] = [
@@ -38,6 +39,7 @@ const navConfig: NavSection[] = [
   {
     label: 'SCRUTINEERING',
     labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'],
+    hideForRoles: ['team_leader'],
     items: [
       { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'] },
       { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_member'] },
@@ -46,7 +48,8 @@ const navConfig: NavSection[] = [
   },
   {
     label: 'TRACK EVENTS',
-    labelRoles: ['admin', 'track_marshal', 'team_leader', 'viewer'],
+    labelRoles: ['admin', 'track_marshal', 'viewer'],
+    hideForRoles: ['team_leader'],
     items: [
       { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
       // Temporarily admin-only
@@ -57,6 +60,7 @@ const navConfig: NavSection[] = [
     // Temporarily admin-only
     label: 'JUDGED EVENTS',
     labelRoles: ['admin'],
+    hideForRoles: ['team_leader'],
     items: [
       { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin'] },
       { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin'] },
@@ -66,6 +70,7 @@ const navConfig: NavSection[] = [
   {
     label: 'TEAM FEATURES',
     labelRoles: ['admin', 'team_member', 'inspection_responsible'],
+    hideForRoles: ['team_leader'],
     items: [
       { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_member', 'inspection_responsible'] }
     ]
@@ -168,6 +173,9 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
         </div>
         <nav className="flex-1 overflow-y-auto px-2 py-4">
           {navConfig.map((section, i) => {
+            // Team leaders and other roles: hide entire section when in hideForRoles
+            if (role && section.hideForRoles?.includes(role)) return null
+
             // Filter items by role
             const visibleItems = section.items.filter(item => !item.roles || (role && item.roles.includes(role)))
             

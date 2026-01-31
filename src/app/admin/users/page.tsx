@@ -43,7 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { DateTime } from 'luxon'
+import { format, parseISO } from 'date-fns'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'] & {
   teams?: { name: string; code: string } | null
@@ -589,7 +589,7 @@ export default function UserManagementPage() {
 
   const formatDate = (date: string | null) => {
     if (!date) return 'N/A'
-    return DateTime.fromISO(date).toLocaleString(DateTime.DATETIME_MED)
+    return format(parseISO(date), 'MMM d, yyyy, h:mm a')
   }
 
   if (loading) {

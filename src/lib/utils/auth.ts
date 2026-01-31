@@ -9,7 +9,7 @@ export type SupabaseBrowserClient = ReturnType<typeof createBrowserClient<Databa
 
 /**
  * Get current authenticated user and their profile
- * @param supabase - Supabase client instance (from getSupabaseClient or createClientSupabase)
+ * @param supabase - Supabase client instance (from getSupabaseClient or createServerSupabase)
  * @returns User and profile data, or null if not authenticated
  */
 export async function getCurrentUser(supabase: SupabaseBrowserClient) {

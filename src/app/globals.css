@@ -116,28 +116,6 @@
   @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
 }
 
-/* Table styles */
-.table {
-  @apply min-w-full divide-y divide-gray-200;
-}
-.table th {
-  @apply px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50;
-}
-.table td {
-  @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900;
-}
-.table tbody tr:hover {
-  @apply bg-gray-50;
-}
-
-/* Modal backdrop/content */
-.modal-backdrop {
-  @apply fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity z-40;
-}
-.modal-content {
-  @apply fixed inset-0 z-50 overflow-y-auto;
-}
-
 /* Status dots */
 .status-dot {
   @apply inline-block w-2 h-2 rounded-full mr-2;

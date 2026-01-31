@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
-import { DateTime } from 'luxon'
+import { addMinutes, parseISO, format } from 'date-fns'
+import { todayInEventTz } from '@/lib/utils/formatting'
 import {
   Loader2,
   AlertCircle,
@@ -75,7 +76,6 @@ type Booking = {
   teams?: Team
 }
 
-const EEST_ZONE = 'Europe/Athens'
 const FEEDBACK_SLOTS_TIMES = ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30']
 
 export default function FeedbackBookingPage() {
@@ -96,7 +96,7 @@ export default function FeedbackBookingPage() {
   const [approvedEvents, setApprovedEvents] = useState<Event[]>([])
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
 
-  const [selectedDate, setSelectedDate] = useState(DateTime.now().setZone(EEST_ZONE).toISODate())
+  const [selectedDate, setSelectedDate] = useState(todayInEventTz())
   const [selectedTime, setSelectedTime] = useState('')
   const [notes, setNotes] = useState('')
 
@@ -265,8 +265,8 @@ export default function FeedbackBookingPage() {
     }
 
     const durationMinutes = selectedEvent.name === 'Design Event' ? 60 : 30
-    const dtStart = DateTime.fromISO(`${selectedDate}T${selectedTime}`, { zone: EEST_ZONE })
-    const dtEnd = dtStart.plus({ minutes: durationMinutes })
+    const dtStart = parseISO(`${selectedDate}T${selectedTime}`)
+    const dtEnd = addMinutes(dtStart, durationMinutes)
 
     setLoading(true)
 
@@ -277,7 +277,7 @@ export default function FeedbackBookingPage() {
         requested_by: user?.id,
         date: selectedDate,
         start_time: selectedTime,
-        end_time: dtEnd.toFormat('HH:mm'),
+        end_time: format(dtEnd, 'HH:mm'),
         location: selectedEvent.location || 'TBD',
         notes,
         status: 'pending',
@@ -341,15 +341,15 @@ export default function FeedbackBookingPage() {
     setLoading(true)
     try {
       const durationMinutes = modalBooking.slot?.name === 'Design Event' ? 60 : 30
-      const dtStart = DateTime.fromISO(`${modalDate}T${modalTime}`, { zone: EEST_ZONE })
-      const dtEnd = dtStart.plus({ minutes: durationMinutes })
+      const dtStart = parseISO(`${modalDate}T${modalTime}`)
+      const dtEnd = addMinutes(dtStart, durationMinutes)
 
       const { error: updateError } = await supabase
         .from('feedback_bookings' as any)
         .update({
           date: modalDate,
           start_time: modalTime,
-          end_time: dtEnd.toFormat('HH:mm'),
+          end_time: format(dtEnd, 'HH:mm'),
           status: 'rescheduled',
         } as any)
         .eq('id', modalBooking.id)
@@ -701,7 +701,7 @@ export default function FeedbackBookingPage() {
                 id="date-picker"
                 type="date"
                 className="h-11"
-                min={DateTime.now().setZone(EEST_ZONE).toISODate() || undefined}
+                min={todayInEventTz()}
                 value={selectedDate || ''}
                 onChange={e => setSelectedDate(e.target.value)}
               />
@@ -801,7 +801,7 @@ export default function FeedbackBookingPage() {
                 type="date"
                 value={modalDate}
                 onChange={e => setModalDate(e.target.value)}
-                min={DateTime.now().setZone(EEST_ZONE).toISODate() || undefined}
+                min={todayInEventTz()}
                 className="h-11"
               />
             </div>

@@ -1,12 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import {
-  PlusIcon,
-  UserGroupIcon,
-  TruckIcon,
-  ClipboardDocumentCheckIcon,
-} from '@heroicons/react/24/outline'
+import { Plus, Users, Truck, ClipboardCheck } from 'lucide-react'
 import { UserRole } from '@/lib/types/database'
 import { CreateTeamModal } from './CreateTeamModal'
 import { CreateVehicleModal } from './CreateVehicleModal'
@@ -25,7 +20,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
     {
       name: 'Create Team',
       description: 'Register a new racing team',
-      icon: UserGroupIcon,
+      icon: Users,
       action: () => setShowCreateTeamModal(true),
       roles: [UserRole.admin, UserRole.team_leader, UserRole.team_member] as UserRole[],
       color: 'text-blue-600 bg-blue-100',
@@ -33,7 +28,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
     {
       name: 'Add Vehicle',
       description: 'Register a new vehicle for scrutineering',
-      icon: TruckIcon,
+      icon: Truck,
       action: () => setShowCreateVehicleModal(true),
       roles: [UserRole.admin, UserRole.team_leader, UserRole.team_member] as UserRole[],
       color: 'text-green-600 bg-green-100',
@@ -41,7 +36,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
     {
       name: 'Schedule Scrutineering',
       description: 'Create a new scrutineering session',
-      icon: ClipboardDocumentCheckIcon,
+      icon: ClipboardCheck,
       action: () => setShowScheduleModal(true),
       roles: [UserRole.admin, UserRole.scrutineer] as UserRole[],
       color: 'text-indigo-600 bg-indigo-100',
@@ -74,7 +69,7 @@ export function QuickActions({ userRole }: QuickActionsProps) {
                 <p className="text-sm font-medium text-gray-900">{action.name}</p>
                 <p className="text-xs text-gray-500">{action.description}</p>
               </div>
-              <PlusIcon className="w-4 h-4 text-gray-400" />
+              <Plus className="w-4 h-4 text-gray-400" />
             </button>
           ))}
         </div>

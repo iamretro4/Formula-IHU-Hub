@@ -4,16 +4,13 @@ import './globals.css'
 import { Providers } from './providers'
 import { LayoutWrapper } from './layout-wrapper'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { SupabaseDebugger } from '@/components/SupabaseDebugger'
+import { SupabaseDebuggerLoader } from '@/components/SupabaseDebuggerLoader'
 
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
   preload: false,
 })
-
-// Force dynamic rendering to prevent build-time Supabase client creation
-export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Scrutineer Hub - Formula IHU 2026 Scrutineering Platform',
@@ -27,7 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ErrorBoundary>
           <Providers>
             <LayoutWrapper>{children}</LayoutWrapper>
-            <SupabaseDebugger />
+            <SupabaseDebuggerLoader />
           </Providers>
         </ErrorBoundary>
       </body>

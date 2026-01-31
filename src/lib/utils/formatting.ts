@@ -1,6 +1,13 @@
 // src/lib/utils/formatting.ts
 import { UserRole } from '@/lib/types/database'
 
+const EVENT_TIMEZONE = 'Europe/Athens'
+
+/** Today's date in event timezone (yyyy-MM-dd) for date inputs. */
+export function todayInEventTz(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: EVENT_TIMEZONE })
+}
+
 // Format user roles for display
 export function formatUserRole(role: UserRole): string {
   const roleMap: Record<UserRole, string> = {

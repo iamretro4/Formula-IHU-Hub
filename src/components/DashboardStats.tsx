@@ -1,11 +1,6 @@
 'use client'
 
-import {
-  UserGroupIcon,
-  TruckIcon,
-  ClipboardDocumentCheckIcon,
-  ClockIcon,
-} from '@heroicons/react/24/outline'
+import { Users, Truck, ClipboardCheck, Clock } from 'lucide-react'
 
 interface DashboardStatsProps {
   stats: {
@@ -21,28 +16,28 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
     {
       name: 'Total Teams',
       value: stats.totalTeams,
-      icon: UserGroupIcon,
+      icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
     },
     {
       name: 'Total Vehicles',
       value: stats.totalVehicles,
-      icon: TruckIcon,
+      icon: Truck,
       color: 'text-green-600',
       bgColor: 'bg-green-100',
     },
     {
       name: "Today's Scrutineering",
       value: stats.todayScrutineering,
-      icon: ClipboardDocumentCheckIcon,
+      icon: ClipboardCheck,
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-100',
     },
     {
       name: 'Pending Reviews',
       value: stats.pendingReviews,
-      icon: ClockIcon,
+      icon: Clock,
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-100',
     },

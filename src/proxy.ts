@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { Database } from '@/lib/types/database'
 
 export async function proxy(request: NextRequest) {
   // Handle CORS for API routes
@@ -50,7 +51,7 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     url,
     key,
     {
@@ -69,8 +70,9 @@ export async function proxy(request: NextRequest) {
   )
 
   const pathname = request.nextUrl.pathname
-  const isAuthRoute = pathname.startsWith('/auth')
-  const isProtectedRoute = !isAuthRoute && pathname !== '/' && !pathname.startsWith('/api')
+  const protectedPaths = ['/dashboard', '/admin', '/scrutineering', '/complete-profile', '/settings', '/judged-events', '/track', '/results', '/feedback']
+  const isAuthRoute = pathname.startsWith('/auth/signin') || pathname.startsWith('/auth/signup')
+  const isProtectedRoute = protectedPaths.some((p) => pathname === p || pathname.startsWith(p + '/'))
 
   // For auth routes, check if user is authenticated
   // Use getUser() directly to validate token with server
@@ -81,9 +83,9 @@ export async function proxy(request: NextRequest) {
       
       // Only redirect if we have a valid authenticated user (no error)
       if (user && !error) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
+        const redirectUrl = request.nextUrl.clone()
+        redirectUrl.pathname = '/dashboard'
+        return NextResponse.redirect(redirectUrl)
       }
       
       // If there's no user or error, allow access to auth routes
@@ -102,16 +104,15 @@ export async function proxy(request: NextRequest) {
       const hasValidSession = user && !error
       
       if (!hasValidSession) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/signin'
-        url.searchParams.set('redirect', pathname)
-        return NextResponse.redirect(url)
+        const signInUrl = request.nextUrl.clone()
+        signInUrl.pathname = '/auth/signin'
+        signInUrl.searchParams.set('next', pathname)
+        return NextResponse.redirect(signInUrl)
       }
     } catch (err) {
-      // On error, redirect to signin
-      const url = request.nextUrl.clone()
-      url.pathname = '/auth/signin'
-      return NextResponse.redirect(url)
+      const signInUrl = request.nextUrl.clone()
+      signInUrl.pathname = '/auth/signin'
+      return NextResponse.redirect(signInUrl)
     }
   }
 

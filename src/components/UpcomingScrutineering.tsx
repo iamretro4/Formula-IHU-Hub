@@ -2,11 +2,7 @@
 
 import Link from 'next/link'
 import { format } from 'date-fns'
-import {
-  ClipboardDocumentCheckIcon,
-  MapPinIcon,
-  UserIcon,
-} from '@heroicons/react/24/outline'
+import { ClipboardCheck, MapPin, User } from 'lucide-react'
 
 interface UpcomingScrutineeringItem {
   id: string
@@ -42,7 +38,7 @@ export function UpcomingScrutineering({ scrutineering }: UpcomingScrutineeringPr
 
       {scrutineering.length === 0 ? (
         <div className="text-center py-8">
-          <ClipboardDocumentCheckIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <ClipboardCheck className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-500">No upcoming scrutineering sessions</p>
         </div>
       ) : (
@@ -65,20 +61,20 @@ export function UpcomingScrutineering({ scrutineering }: UpcomingScrutineeringPr
                   
                   <div className="flex items-center space-x-4 text-sm text-gray-600">
                     <div className="flex items-center space-x-1">
-                      <ClipboardDocumentCheckIcon className="w-4 h-4" />
+                      <ClipboardCheck className="w-4 h-4" />
                       <span>{format(new Date(session.scheduledAt), 'MMM d, yyyy HH:mm')}</span>
                     </div>
                     
                     {session.location && (
                       <div className="flex items-center space-x-1">
-                        <MapPinIcon className="w-4 h-4" />
+                        <MapPin className="w-4 h-4" />
                         <span>{session.location}</span>
                       </div>
                     )}
                     
                     {session.scrutineer?.name && (
                       <div className="flex items-center space-x-1">
-                        <UserIcon className="w-4 h-4" />
+                        <User className="w-4 h-4" />
                         <span>{session.scrutineer.name}</span>
                       </div>
                     )}
