@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Trophy, Calendar, CalendarCheck, CheckCircle2, Flag,
   Zap, FilePenLine, FileText, Building2, MessageSquare, User, LogOut,
   Users, Scale, Settings, ClipboardList, TrendingUp,
-  UserCircle, LogOut as LogoutIcon, Shield, Wrench, X
+  UserCircle, LogOut as LogoutIcon, Wrench, X
 } from "lucide-react"
 
 type NavItem = {
@@ -81,9 +81,7 @@ const navConfig: NavSection[] = [
     label: 'ADMINISTRATION',
     labelRoles: ['admin', 'scrutineer', 'team_leader'],
     items: [
-      { label: 'Admin Panel', href: '/admin', icon: <Shield className="w-5 h-5" />, roles: ['admin'] },
       { label: 'User Management', href: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin', 'team_leader'] },
-      // Temporarily removed: Penalty Management
       // { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] }
     ]
   },

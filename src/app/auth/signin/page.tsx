@@ -15,9 +15,12 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [resendLoading, setResendLoading] = useState(false)
   const redirectHandled = useRef(false)
   const formSubmitInProgress = useRef(false)
   const [logoError, setLogoError] = useState(false)
+
+  const isEmailNotConfirmedError = error != null && /email not confirmed|confirm your email/i.test(error)
 
   const {
     register,
@@ -197,6 +200,31 @@ export default function SignInPage() {
     [handleSubmit, onSubmit]
   )
 
+  const handleResendConfirmation = useCallback(async () => {
+    const email = emailValue?.trim()
+    if (!email || !hasSupabaseEnv()) return
+    setResendLoading(true)
+    setError(null)
+    try {
+      const supabase = getSupabaseClient()
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      })
+      if (resendError) {
+        setError(resendError.message || 'Failed to resend confirmation email.')
+        toast.error(resendError.message || 'Failed to resend')
+      } else {
+        toast.success('Confirmation email sent. Check your inbox.')
+      }
+    } catch {
+      setError('Failed to resend confirmation email.')
+      toast.error('Failed to resend')
+    } finally {
+      setResendLoading(false)
+    }
+  }, [emailValue])
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-white to-primary/5 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       {/* Background decoration: soft gradient orbs only */}
@@ -245,7 +273,19 @@ export default function SignInPage() {
           {error && (
             <Alert variant="destructive" className="mb-6 animate-fade-in">
               <AlertCircle className="w-4 h-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {isEmailNotConfirmedError && (
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={resendLoading || !emailValue?.trim()}
+                    className="mt-3 block w-full text-left text-sm font-medium underline underline-offset-2 hover:no-underline disabled:opacity-50"
+                  >
+                    {resendLoading ? 'Sending…' : 'Resend confirmation email'}
+                  </button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 

@@ -86,6 +86,11 @@ After adding or changing variables, **redeploy** (Deployments → … → Redepl
 - Add the DNS records Resend gives you (SPF, DKIM).  
 - Then set `RESEND_FROM_EMAIL=Formula IHU Hub <noreply@fihu.gr>` in Vercel and redeploy.
 
+**Approval emails:** When an admin approves a user, the app sends an “Account approved” email via Resend. For this to work:
+- Set `RESEND_API_KEY` in Vercel (required).
+- Set `RESEND_FROM_EMAIL` and verify that domain in Resend (required for sending to any recipient; otherwise Resend only allows sending to your Resend account email).
+- After fixing config, admins can use **Resend approval email** on an approved user (Admin → Users → ⋮ → Resend approval email) to send the email again.
+
 ---
 
 ## Quick checklist
@@ -96,3 +101,4 @@ After adding or changing variables, **redeploy** (Deployments → … → Redepl
 - [ ] Supabase: Site URL and Redirect URLs set for `https://hub.fihu.gr` and localhost
 - [ ] Supabase: SMTP configured (Resend) for auth emails
 - [ ] Resend: domain verified if using `noreply@fihu.gr`
+- [ ] Vercel: `RESEND_API_KEY` and `RESEND_FROM_EMAIL` set for approval emails to work

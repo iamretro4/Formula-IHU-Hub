@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   MoreVertical,
+  Mail,
 } from 'lucide-react'
 import { Database } from '@/lib/types/database'
 import { logger } from '@/lib/utils/logger'
@@ -111,6 +112,7 @@ export default function UserManagementPage() {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
   const [approvingUserId, setApprovingUserId] = useState<string | null>(null)
+  const [resendingUserId, setResendingUserId] = useState<string | null>(null)
 
   const loadData = useCallback(async (isRefresh = false) => {
     const currentRunId = ++effectRunIdRef.current
@@ -531,6 +533,41 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleResendApprovalEmail = async (userId: string) => {
+    if (userRole !== 'admin') return
+    setResendingUserId(userId)
+    try {
+      const res = await fetch('/api/admin/resend-approval-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        toast.error(data.message || 'Failed to resend approval email')
+        return
+      }
+      if (data.email_sent) {
+        toast.success('Approval email sent.')
+      } else if (data.email_error) {
+        const err = data.email_error as string
+        const isResendRestriction = /only send testing emails to your own email|verify a domain at resend/i.test(err)
+        if (isResendRestriction) {
+          toast.error(
+            'To send approval emails: verify your domain at resend.com/domains and set RESEND_FROM_EMAIL in Vercel (e.g. Formula IHU Hub <noreply@fihu.gr>), then redeploy.',
+            { duration: 10000 }
+          )
+        } else {
+          toast.error(`Email could not be sent: ${err}`, { duration: 6000 })
+        }
+      }
+    } catch {
+      toast.error('Failed to resend approval email')
+    } finally {
+      setResendingUserId(null)
+    }
+  }
+
   const handleRejectUser = async (userId: string) => {
     if (userRole !== 'admin') return
     setApprovingUserId(userId)
@@ -925,14 +962,27 @@ export default function UserManagementPage() {
                                   </>
                                 )}
                                 {userRole === 'admin' && user.login_approved !== false && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleRejectUser(user.id)}
-                                    disabled={approvingUserId === user.id}
-                                    variant="destructive"
-                                  >
-                                    <UserX className="w-4 h-4 mr-2" />
-                                    Revoke approval
-                                  </DropdownMenuItem>
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => handleResendApprovalEmail(user.id)}
+                                      disabled={resendingUserId === user.id}
+                                    >
+                                      {resendingUserId === user.id ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      ) : (
+                                        <Mail className="w-4 h-4 mr-2" />
+                                      )}
+                                      Resend approval email
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleRejectUser(user.id)}
+                                      disabled={approvingUserId === user.id}
+                                      variant="destructive"
+                                    >
+                                      <UserX className="w-4 h-4 mr-2" />
+                                      Revoke approval
+                                    </DropdownMenuItem>
+                                  </>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>

@@ -46,10 +46,10 @@ Supabase sends these; configure **Custom SMTP** so they go through Resend:
 
 The app sends these via the Resend API (see `src/lib/email.ts`). They require:
 
-- **Vercel** (or your host): Set `RESEND_API_KEY` and optionally `RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`. Redeploy after changing env.
-- **Resend**: If you use a custom “from” (e.g. `noreply@fihu.gr`), [verify the domain](https://resend.com/domains) and add the DNS records Resend provides (SPF, DKIM, optional DMARC).
+- **Vercel** (or your host): Set `RESEND_API_KEY` (required). Set `RESEND_FROM_EMAIL` (e.g. `Formula IHU Hub <noreply@fihu.gr>`) and `NEXT_PUBLIC_APP_URL`. Redeploy after changing env.
+- **Resend**: [Verify the domain](https://resend.com/domains) you use in `RESEND_FROM_EMAIL` and add the DNS records Resend provides (SPF, DKIM). **Approval emails will not work for arbitrary recipients** until the domain is verified and `RESEND_FROM_EMAIL` is set.
 
-Without a verified domain, Resend only allows sending to the email on your Resend account (testing mode).
+Without a verified domain and `RESEND_FROM_EMAIL`, Resend only allows sending to the email on your Resend account (testing mode). If approval email fails, the admin can use **Resend approval email** (Admin → Users → ⋮ on an approved user) after fixing config.
 
 ## 5. Quick tests
 

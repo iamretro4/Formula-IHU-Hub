@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from 'react'
+import { createContext, useContext, useEffect, useState, useRef, ReactNode, useMemo, useCallback } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { Database } from '@/lib/types/database'
 import getSupabaseClient from '@/lib/supabase/client'
@@ -29,11 +29,21 @@ function fetchProfile(supabase: ReturnType<typeof getSupabaseClient>, userId: st
     })
 }
 
+async function syncProfileFromAuth(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/users/sync-profile', { method: 'POST' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const syncedProfileForUser = useRef<string | null>(null)
 
   const supabase = useMemo(() => {
     if (typeof window === 'undefined') return null
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (event === 'SIGNED_OUT') {
         setUser(null)
         setProfile(null)
+        syncedProfileForUser.current = null
         return
       }
       if (session?.user) {
@@ -94,10 +105,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null)
         setProfile(null)
+        syncedProfileForUser.current = null
       }
     })
     return () => subscription.unsubscribe()
   }, [supabase])
+
+  // When user has a session but profile_completed is false (e.g. confirmed via Site URL, never hit callback), sync once
+  useEffect(() => {
+    if (!user || !profile || profile.profile_completed !== false) return
+    if (syncedProfileForUser.current === user.id) return
+    syncedProfileForUser.current = user.id
+    syncProfileFromAuth().then((ok) => {
+      if (ok && supabase) fetchProfile(supabase, user.id, setProfile)
+    })
+  }, [user, profile, supabase])
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, error, refetch: loadAuth }}>
