@@ -22,7 +22,6 @@ import {
   Clock,
   FileText,
   Settings,
-  BarChart3,
   Activity,
   Database,
   Lock,
@@ -332,20 +331,14 @@ export default function AdminPanelPage() {
       href: '/admin/users',
       color: 'from-blue-500 to-blue-600',
     },
-    {
-      title: 'System Reports',
-      description: 'View system analytics and reports',
-      icon: BarChart3,
-      href: '/admin/reports',
-      color: 'from-purple-500 to-purple-600',
-    },
-    {
-      title: 'Penalty Management',
-      description: 'Manage penalty rules and incidents',
-      icon: Scale,
-      href: '/admin/penalties',
-      color: 'from-red-500 to-red-600',
-    },
+    // Temporarily removed: Penalty Management
+    // {
+    //   title: 'Penalty Management',
+    //   description: 'Manage penalty rules and incidents',
+    //   icon: Scale,
+    //   href: '/admin/penalties',
+    //   color: 'from-red-500 to-red-600',
+    // },
     {
       title: 'Feedback Bookings',
       description: 'Manage feedback appointments',

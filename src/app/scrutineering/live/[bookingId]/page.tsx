@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useRef, useMemo } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { use, useEffect, useState, useRef, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -105,9 +105,14 @@ type InspectionComment = {
   } | null
 }
 
-export default function ChecklistBookingPage() {
-  const params = useParams<{ bookingId: string }>()
-  const bookingId = params?.bookingId
+type PageProps = {
+  params: Promise<{ bookingId: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default function ChecklistBookingPage({ params, searchParams }: PageProps) {
+  const { bookingId } = use(params)
+  use(searchParams ?? Promise.resolve({}))
   const router = useRouter()
   const { profile: authProfile, loading: authLoading } = useAuth()
   const supabase = useMemo(() => getSupabaseClient(), [])

@@ -108,7 +108,7 @@ export default function ResetPasswordPage() {
       // Redirect to sign in after a short delay
       setTimeout(() => {
         router.push('/auth/signin')
-      }, 2000)
+      }, 1000)
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
       setError(errorMessage)

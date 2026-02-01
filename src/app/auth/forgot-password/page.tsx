@@ -1,13 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import toast from 'react-hot-toast'
-import getSupabaseClient from '@/lib/supabase/client'
+import getSupabaseClient, { hasSupabaseEnv } from '@/lib/supabase/client'
 import { Mail, ArrowLeft, Loader2, AlertCircle, CheckCircle2, KeyRound } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -19,9 +18,9 @@ type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>
 
 export default function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isResending, setIsResending] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
 
   const {
     register,
@@ -32,20 +31,27 @@ export default function ForgotPasswordPage() {
     resolver: zodResolver(forgotPasswordSchema),
   })
 
+  const sendResetEmail = async (email: string) => {
+    const supabase = getSupabaseClient()
+    return supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${typeof window !== 'undefined' ? window.location.origin : ''}/auth/reset-password`,
+    })
+  }
+
   const onSubmit = async (data: ForgotPasswordInput) => {
+    if (!hasSupabaseEnv()) {
+      setError('Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local and restart the dev server.')
+      return
+    }
     setIsLoading(true)
     setError(null)
     setIsSuccess(false)
 
     try {
-      const supabase = getSupabaseClient()
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(data.email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
-      })
+      const { error: resetError } = await sendResetEmail(data.email)
 
       if (resetError) {
         setError(resetError.message || 'Failed to send password reset email')
-        toast.error(resetError.message || 'Failed to send password reset email')
         setIsLoading(false)
         return
       }
@@ -55,10 +61,30 @@ export default function ForgotPasswordPage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
       setError(errorMessage)
-      toast.error(errorMessage)
+      toast.error('Something went wrong. Please try again.')
       setIsLoading(false)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const onResend = async () => {
+    const email = getValues('email')
+    if (!email || !hasSupabaseEnv()) return
+    setIsResending(true)
+    setError(null)
+    try {
+      const { error: resetError } = await sendResetEmail(email)
+      if (resetError) {
+        setError(resetError.message || 'Failed to resend')
+        toast.error(resetError.message || 'Failed to resend')
+      } else {
+        toast.success('Reset link sent again. Please check your inbox.')
+      }
+    } catch {
+      toast.error('Something went wrong. Please try again.')
+    } finally {
+      setIsResending(false)
     }
   }
 
@@ -96,10 +122,26 @@ export default function ForgotPasswordPage() {
 
             <div className="space-y-4">
               <button
-                onClick={() => setIsSuccess(false)}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg transition-all duration-200"
+                type="button"
+                onClick={onResend}
+                disabled={isResending}
+                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-6 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Resend Email
+                {isResending ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Resend Email'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSuccess(false)}
+                className="w-full text-center text-sm text-gray-600 hover:text-primary transition-colors font-medium"
+              >
+                Use a different email
               </button>
               
               <Link
@@ -139,6 +181,14 @@ export default function ForgotPasswordPage() {
 
         {/* Form Card */}
         <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-gray-200/50 p-8 sm:p-10 hover:shadow-3xl transition-all duration-300">
+          {!hasSupabaseEnv() && (
+            <Alert variant="destructive" className="mb-6 animate-fade-in">
+              <AlertCircle className="w-4 h-4" />
+              <AlertDescription>
+                Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local, then restart the dev server (npm run dev).
+              </AlertDescription>
+            </Alert>
+          )}
           {error && (
             <Alert variant="destructive" className="mb-6 animate-fade-in">
               <AlertCircle className="w-4 h-4" />

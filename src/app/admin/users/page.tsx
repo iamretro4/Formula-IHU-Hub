@@ -14,21 +14,14 @@ import {
   Save,
   X,
   Users,
-  Shield,
-  Filter,
   RefreshCw,
   UserCheck,
   UserX,
-  Mail,
-  Building2,
-  Calendar,
-  AlertCircle,
   Edit2,
   CheckCircle2,
   XCircle,
   ChevronDown,
   ChevronUp,
-  Download,
   MoreVertical,
 } from 'lucide-react'
 import { Database } from '@/lib/types/database'
@@ -43,6 +36,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { format, parseISO } from 'date-fns'
 
 type UserProfile = Database['public']['Tables']['user_profiles']['Row'] & {
@@ -284,20 +283,6 @@ export default function UserManagementPage() {
 
     return filtered
   }, [users, searchQuery, roleFilter, teamFilter, approvalFilter, sortBy, sortDirection])
-
-  const stats = useMemo(() => {
-    const total = users.length
-    const active = users.filter(u => u.profile_completed).length
-    const incomplete = total - active
-    const pendingApproval = users.filter(u => !(u as UserProfile).login_approved).length
-    const byRole = users.reduce((acc, u) => {
-      const role = u.app_role || 'unknown'
-      acc[role] = (acc[role] || 0) + 1
-      return acc
-    }, {} as Record<string, number>)
-
-    return { total, active, incomplete, pendingApproval, byRole }
-  }, [users])
 
   const getRoleInfo = (role: string) => {
     return ALL_ROLES.find(r => r.value === role) || { label: role, color: 'bg-gray-100 text-gray-700 border-gray-300' }
@@ -608,128 +593,35 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-2">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Users className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-4 animate-fade-in min-h-screen">
+      {/* Header + toolbar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Users className="w-6 h-6 text-primary" />
             User Management
           </h1>
-          <p className="text-gray-600 max-w-2xl">
-            {userRole === 'admin' 
-              ? 'Manage all users and their permissions across the system' 
-              : 'Manage your team members and their roles'}
+          <p className="text-sm text-gray-500 mt-0.5">
+            {userRole === 'admin' ? 'All users' : 'Your team and pending approvals'}
           </p>
         </div>
-        <Button
-          onClick={() => loadData(true)}
-          disabled={refreshing || loading}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Users</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm">
-                <Users className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Users</p>
-                <p className="text-3xl font-bold text-green-600">{stats.active}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-green-600 shadow-sm">
-                <UserCheck className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Incomplete Profiles</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.incomplete}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-sm">
-                <UserX className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        {userRole === 'admin' && (
-          <Card className="shadow-md border-gray-200">
-            <CardContent className="p-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600 mb-1">Pending Approval</p>
-                  <p className="text-3xl font-bold text-amber-600">{stats.pendingApproval}</p>
-                </div>
-                <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
-                  <UserCheck className="w-6 h-6 text-white" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Filtered Results</p>
-                <p className="text-3xl font-bold text-purple-600">{filteredAndSortedUsers.length}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-sm">
-                <Filter className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters and Search */}
-      <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="w-5 h-5" />
-            Filters & Search
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+        {userRole === 'admin' ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[140px] sm:max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
-                placeholder="Search users..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-8 h-9 text-sm"
               />
             </div>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Filter by role" />
+              <SelectTrigger className="h-9 w-[130px]">
+                <SelectValue placeholder="Role" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
                 {getAvailableRoles().map((role) => (
                   <SelectItem key={role.value} value={role.value}>
                     {role.label}
@@ -737,160 +629,155 @@ export default function UserManagementPage() {
                 ))}
               </SelectContent>
             </Select>
-            {userRole === 'admin' && (
-              <Select value={approvalFilter} onValueChange={setApprovalFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Login status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="pending">Pending approval</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            {userRole === 'admin' && (
-              <Select value={teamFilter} onValueChange={setTeamFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by team" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Teams</SelectItem>
-                  {teams.map((team) => (
-                    <SelectItem key={team.id} value={team.id}>
-                      {team.name} ({team.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+            <Select value={teamFilter} onValueChange={setTeamFilter}>
+              <SelectTrigger className="h-9 w-[120px]">
+                <SelectValue placeholder="Team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All teams</SelectItem>
+                {teams.map((team) => (
+                  <SelectItem key={team.id} value={team.id}>
+                    {team.name} ({team.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={approvalFilter} onValueChange={setApprovalFilter}>
+              <SelectTrigger className="h-9 w-[120px]">
+                <SelectValue placeholder="Login" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={`${sortBy}-${sortDirection}`} onValueChange={(value) => {
               const [col, dir] = value.split('-')
               setSortBy(col as SortOption)
               setSortDirection(dir as SortDirection)
             }}>
-              <SelectTrigger>
-                <SelectValue placeholder="Sort by" />
+              <SelectTrigger className="h-9 w-[130px]">
+                <SelectValue placeholder="Sort" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                <SelectItem value="name-desc">Name (Z-A)</SelectItem>
-                <SelectItem value="email-asc">Email (A-Z)</SelectItem>
-                <SelectItem value="email-desc">Email (Z-A)</SelectItem>
-                <SelectItem value="role-asc">Role (A-Z)</SelectItem>
-                <SelectItem value="role-desc">Role (Z-A)</SelectItem>
-                {userRole === 'admin' && (
-                  <>
-                    <SelectItem value="team-asc">Team (A-Z)</SelectItem>
-                    <SelectItem value="team-desc">Team (Z-A)</SelectItem>
-                  </>
-                )}
-                <SelectItem value="created_at-desc">Newest First</SelectItem>
-                <SelectItem value="created_at-asc">Oldest First</SelectItem>
+                <SelectItem value="name-asc">Name A–Z</SelectItem>
+                <SelectItem value="name-desc">Name Z–A</SelectItem>
+                <SelectItem value="email-asc">Email A–Z</SelectItem>
+                <SelectItem value="email-desc">Email Z–A</SelectItem>
+                <SelectItem value="created_at-desc">Newest</SelectItem>
+                <SelectItem value="created_at-asc">Oldest</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              onClick={() => loadData(true)}
+              disabled={refreshing || loading}
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        ) : (
+          <Button
+            onClick={() => loadData(true)}
+            disabled={refreshing || loading}
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        )}
+      </div>
 
       {/* Users Table */}
-      <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>
-                {userRole === 'admin' ? 'All Users' : 'Team Members'} ({filteredAndSortedUsers.length})
-              </CardTitle>
-              <CardDescription className="mt-1">
-                {filteredAndSortedUsers.length === 0 
-                  ? 'No users match your filters'
-                  : `Showing ${filteredAndSortedUsers.length} of ${users.length} users`}
-              </CardDescription>
-            </div>
-          </div>
+      <Card className="border border-gray-200">
+        <CardHeader className="py-4">
+          <CardTitle className="text-base font-semibold">
+            {userRole === 'admin' ? (
+              <>All Users · {filteredAndSortedUsers.length}{users.length !== filteredAndSortedUsers.length && ` of ${users.length}`}</>
+            ) : (
+              <>Team members · {filteredAndSortedUsers.length}</>
+            )}
+          </CardTitle>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-0 pb-6">
           {filteredAndSortedUsers.length === 0 ? (
             <div className="text-center py-12">
               <Users className="w-16 h-16 mx-auto mb-4 text-gray-300" />
               <p className="text-gray-500 font-medium text-lg mb-2">No users found</p>
               <p className="text-sm text-gray-400">
-                {searchQuery || roleFilter !== 'all' || teamFilter !== 'all'
+                {userRole === 'admin' && (searchQuery || roleFilter !== 'all' || teamFilter !== 'all')
                   ? 'Try adjusting your filters or search query'
-                  : 'No users available'}
+                  : userRole === 'admin'
+                    ? 'No users available'
+                    : 'No team members or pending approvals yet'}
               </p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                  <tr className="border-b border-gray-200 bg-gray-50/50">
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm">
                       <button
                         onClick={() => handleSort('name')}
-                        className="flex items-center gap-1 hover:text-primary transition-colors"
+                        className="flex items-center gap-1 hover:text-primary"
                       >
                         User
                         <SortIcon column="name" />
                       </button>
                     </th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
-                      <button
-                        onClick={() => handleSort('email')}
-                        className="flex items-center gap-1 hover:text-primary transition-colors"
-                      >
-                        Email
-                        <SortIcon column="email" />
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm">Email</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm">
                       <button
                         onClick={() => handleSort('role')}
-                        className="flex items-center gap-1 hover:text-primary transition-colors"
+                        className="flex items-center gap-1 hover:text-primary"
                       >
                         Role
                         <SortIcon column="role" />
                       </button>
                     </th>
                     {userRole === 'admin' && (
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">
+                      <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm">
                         <button
                           onClick={() => handleSort('team')}
-                          className="flex items-center gap-1 hover:text-primary transition-colors"
+                          className="flex items-center gap-1 hover:text-primary"
                         >
                           Team
                           <SortIcon column="team" />
                         </button>
                       </th>
                     )}
-                    {userRole === 'admin' && (
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Login</th>
-                    )}
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                    <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm">Status</th>
+                    <th className="text-left py-2.5 px-3 font-medium text-gray-600 text-sm w-[80px]">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredAndSortedUsers.map((user) => {
                     const roleInfo = getRoleInfo(user.app_role || '')
                     return (
-                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-white font-semibold text-sm shadow-sm">
+                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50/50">
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
                               {getInitials(user)}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900">
+                              <p className="font-medium text-gray-900 text-sm">
                                 {user.first_name} {user.last_name}
                               </p>
                               <p className="text-xs text-gray-500">
-                                Joined {formatDate(user.created_at)}
+                                {formatDate(user.created_at)}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 px-3 text-sm text-gray-600">
                           {userRole === 'admin' && editingUserId === user.id ? (
                             <Input
                               type="email"
@@ -900,13 +787,10 @@ export default function UserManagementPage() {
                               className="w-48 text-sm"
                             />
                           ) : (
-                            <div className="flex items-center gap-2 text-sm text-gray-600">
-                              <Mail className="w-4 h-4 text-gray-400" />
-                              {user.email}
-                            </div>
+                            user.email
                           )}
                         </td>
-                        <td className="py-4 px-4">
+                        <td className="py-3 px-3">
                           {editingUserId === user.id ? (
                             <div className="flex items-center space-x-2">
                               <Select
@@ -926,13 +810,13 @@ export default function UserManagementPage() {
                               </Select>
                             </div>
                           ) : (
-                            <Badge className={`${roleInfo.color} border font-medium`}>
+                            <Badge className={`${roleInfo.color} border text-xs`}>
                               {roleInfo.label}
                             </Badge>
                           )}
                         </td>
                         {userRole === 'admin' && (
-                          <td className="py-4 px-4">
+                          <td className="py-3 px-3 text-sm text-gray-600">
                             {editingUserId === user.id ? (
                               <Select
                                 value={editingTeamId || 'none'}
@@ -951,230 +835,108 @@ export default function UserManagementPage() {
                                 </SelectContent>
                               </Select>
                             ) : user.teams ? (
-                              <div className="flex items-center gap-2">
-                                <Building2 className="w-4 h-4 text-gray-400" />
-                                <span className="text-sm text-gray-600">
-                                  {user.teams.name}
-                                </span>
-                                <Badge variant="outline" className="text-xs">
-                                  {user.teams.code}
-                                </Badge>
-                              </div>
+                              <span>{user.teams.code}</span>
                             ) : (
-                              <span className="text-sm text-gray-400">No team</span>
+                              <span className="text-gray-400">—</span>
                             )}
                           </td>
                         )}
-                        {userRole === 'admin' && (
-                          <td className="py-4 px-4">
-                            {user.login_approved !== false ? (
-                              <Badge className="bg-green-100 text-green-700 border-green-300">
-                                <CheckCircle2 className="w-3 h-3 mr-1 inline" />
-                                Approved
-                              </Badge>
-                            ) : (
-                              <Badge className="bg-amber-100 text-amber-700 border-amber-300">
-                                Pending
-                              </Badge>
-                            )}
-                          </td>
-                        )}
-                        <td className="py-4 px-4">
-                          {user.profile_completed ? (
-                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                              <CheckCircle2 className="w-3 h-3 mr-1 inline" />
-                              Active
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-300">
-                              <XCircle className="w-3 h-3 mr-1 inline" />
-                              Incomplete
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {userRole === 'admin' && user.login_approved === false && (
+                        <td className="py-3 px-3">
+                          <div className="flex flex-wrap gap-1.5 items-center text-sm">
+                            {userRole === 'admin' && (
                               <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleApproveUser(user.id, !!(user as UserProfile).team_lead)}
-                                  disabled={approvingUserId === user.id}
-                                  className="gap-1 bg-green-600 hover:bg-green-700"
-                                >
-                                  {approvingUserId === user.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <UserCheck className="w-4 h-4" />
-                                      {(user as UserProfile).team_lead ? 'Approve as leader' : 'Approve'}
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleRejectUser(user.id)}
-                                  disabled={approvingUserId === user.id}
-                                  className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
-                                >
-                                  {approvingUserId === user.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <UserX className="w-4 h-4" />
-                                      Reject
-                                    </>
-                                  )}
-                                </Button>
-                              </>
-                            )}
-                            {userRole === 'admin' && user.login_approved !== false && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleRejectUser(user.id)}
-                                disabled={approvingUserId === user.id}
-                                className="gap-1 text-amber-700 border-amber-300 hover:bg-amber-50"
-                              >
-                                {approvingUserId === user.id ? (
-                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                {user.login_approved !== false ? (
+                                  <span className="text-green-600">Approved</span>
                                 ) : (
-                                  <>
-                                    <UserX className="w-4 h-4" />
-                                    Revoke
-                                  </>
+                                  <span className="text-amber-600">Pending</span>
                                 )}
-                              </Button>
+                                <span className="text-gray-300" aria-hidden>·</span>
+                              </>
                             )}
-                            {editingUserId === user.id ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleSaveRole(user.id)}
-                                  disabled={saving === user.id}
-                                  className="gap-1"
-                                >
-                                  {saving === user.id ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <>
-                                      <Save className="w-4 h-4" />
-                                      Save
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={handleCancelEdit}
-                                  disabled={saving === user.id}
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </>
+                            {user.profile_completed ? (
+                              <span className="text-green-600">Active</span>
                             ) : (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEditRole(user)}
-                                  disabled={user.id === currentUser?.id && userRole === 'team_leader'}
-                                  className="gap-1"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                  Edit
-                                </Button>
-                                <Dialog open={userDetailsOpen && selectedUser?.id === user.id} onOpenChange={(open) => {
-                                  if (!open) {
-                                    setUserDetailsOpen(false)
-                                    setSelectedUser(null)
-                                  } else {
-                                    setSelectedUser(user)
-                                    setUserDetailsOpen(true)
-                                  }
-                                }}>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => {
-                                        setSelectedUser(user)
-                                        setUserDetailsOpen(true)
-                                      }}
-                                    >
-                                      <MoreVertical className="w-4 h-4" />
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                                    <DialogHeader>
-                                      <DialogTitle className="flex items-center gap-2">
-                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center text-white font-semibold text-lg shadow-sm">
-                                          {getInitials(user)}
-                                        </div>
-                                        User Details
-                                      </DialogTitle>
-                                      <DialogDescription>
-                                        Complete information for {user.first_name} {user.last_name}
-                                      </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-4 pt-4">
-                                      <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">First Name</p>
-                                          <p className="text-base text-gray-900">{user.first_name || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Last Name</p>
-                                          <p className="text-base text-gray-900">{user.last_name || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Email</p>
-                                          <p className="text-base text-gray-900">{user.email || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Phone</p>
-                                          <p className="text-base text-gray-900">{user.phone || 'N/A'}</p>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Role</p>
-                                          <Badge className={`${getRoleInfo(user.app_role || '').color} border`}>
-                                            {getRoleInfo(user.app_role || '').label}
-                                          </Badge>
-                                        </div>
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Status</p>
-                                          {user.profile_completed ? (
-                                            <Badge className="bg-green-100 text-green-700 border-green-300">
-                                              <CheckCircle2 className="w-3 h-3 mr-1 inline" />
-                                              Active
-                                            </Badge>
-                                          ) : (
-                                            <Badge className="bg-orange-100 text-orange-700 border-orange-300">
-                                              <XCircle className="w-3 h-3 mr-1 inline" />
-                                              Incomplete
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        {userRole === 'admin' && (
-                                          <div>
-                                            <p className="text-sm font-medium text-gray-500">Team</p>
-                                            <p className="text-base text-gray-900">
-                                              {user.teams ? `${user.teams.name} (${user.teams.code})` : 'No team'}
-                                            </p>
-                                          </div>
-                                        )}
-                                        <div>
-                                          <p className="text-sm font-medium text-gray-500">Created At</p>
-                                          <p className="text-base text-gray-900">{formatDate(user.created_at)}</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              </>
+                              <span className="text-orange-600">Incomplete</span>
                             )}
                           </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          {editingUserId === user.id ? (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveRole(user.id)}
+                                disabled={saving === user.id}
+                                className="h-8 gap-1"
+                              >
+                                {saving === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={handleCancelEdit}
+                                disabled={saving === user.id}
+                                className="h-8 px-2"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="w-4 h-4" />
+                                  <span className="sr-only">Actions</span>
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setSelectedUser(user); setUserDetailsOpen(true) }}>
+                                  View details
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => handleEditRole(user)}
+                                  disabled={user.id === currentUser?.id && userRole === 'team_leader'}
+                                >
+                                  <Edit2 className="w-4 h-4 mr-2" />
+                                  Edit role & team
+                                </DropdownMenuItem>
+                                {userRole === 'admin' && user.login_approved === false && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() => handleApproveUser(user.id, !!(user as UserProfile).team_lead)}
+                                      disabled={approvingUserId === user.id}
+                                    >
+                                      {approvingUserId === user.id ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                      ) : (
+                                        <UserCheck className="w-4 h-4 mr-2" />
+                                      )}
+                                      {(user as UserProfile).team_lead ? 'Approve as leader' : 'Approve'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={() => handleRejectUser(user.id)}
+                                      disabled={approvingUserId === user.id}
+                                      variant="destructive"
+                                    >
+                                      <UserX className="w-4 h-4 mr-2" />
+                                      Reject
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                                {userRole === 'admin' && user.login_approved !== false && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRejectUser(user.id)}
+                                    disabled={approvingUserId === user.id}
+                                    variant="destructive"
+                                  >
+                                    <UserX className="w-4 h-4 mr-2" />
+                                    Revoke approval
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </td>
                       </tr>
                     )
@@ -1185,6 +947,59 @@ export default function UserManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* User details dialog (opened from row actions) */}
+      <Dialog open={userDetailsOpen} onOpenChange={(open) => {
+        if (!open) { setUserDetailsOpen(false); setSelectedUser(null) }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {selectedUser && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold">
+                    {getInitials(selectedUser)}
+                  </div>
+                  {selectedUser.first_name} {selectedUser.last_name}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedUser.email}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-2 gap-4 pt-4 text-sm">
+                <div>
+                  <p className="font-medium text-gray-500">Role</p>
+                  <Badge className={`${getRoleInfo(selectedUser.app_role || '').color} border mt-0.5`}>
+                    {getRoleInfo(selectedUser.app_role || '').label}
+                  </Badge>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-500">Status</p>
+                  <span className={selectedUser.profile_completed ? 'text-green-600' : 'text-orange-600'}>
+                    {selectedUser.profile_completed ? 'Active' : 'Incomplete'}
+                  </span>
+                </div>
+                {userRole === 'admin' && (
+                  <div>
+                    <p className="font-medium text-gray-500">Team</p>
+                    <p className="text-gray-900">{selectedUser.teams ? `${selectedUser.teams.name} (${selectedUser.teams.code})` : 'No team'}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="font-medium text-gray-500">Joined</p>
+                  <p className="text-gray-900">{formatDate(selectedUser.created_at)}</p>
+                </div>
+                {selectedUser.phone && (
+                  <div className="col-span-2">
+                    <p className="font-medium text-gray-500">Phone</p>
+                    <p className="text-gray-900">{selectedUser.phone}</p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

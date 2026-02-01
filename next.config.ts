@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
+    qualities: [75, 90],
   },
   output: 'standalone',
   // Environment variables configuration

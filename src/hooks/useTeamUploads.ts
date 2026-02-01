@@ -26,12 +26,36 @@ export function useTeamUploads(teamId: string | null, supabaseOrNull?: SupabaseC
       return
     }
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('team_uploads' as any)
-        .select('*, uploaded_by (first_name, last_name)')
+        .select('id, team_id, uploaded_by, document_key, file_name, storage_path, uploaded_at')
         .eq('team_id', teamId)
         .order('uploaded_at', { ascending: false })
-      setUploadedFiles((data ?? []) as unknown as UploadedFile[])
+      if (error) {
+        console.error('Error fetching uploaded files:', error)
+        setUploadedFiles([])
+        return
+      }
+      const rows = (data ?? []) as Array<{
+        id: string
+        team_id: string
+        uploaded_by: string
+        document_key: string
+        file_name: string
+        storage_path: string
+        uploaded_at: string | null
+      }>
+      setUploadedFiles(
+        rows.map((r) => ({
+          id: r.id,
+          team_id: r.team_id,
+          uploaded_by: r.uploaded_by,
+          document_key: r.document_key,
+          file_name: r.file_name ?? '',
+          storage_path: r.storage_path ?? '',
+          uploaded_at: r.uploaded_at ?? new Date().toISOString(),
+        }))
+      )
     } catch (error) {
       console.error('Error fetching uploaded files:', error)
       setUploadedFiles([])
@@ -52,12 +76,35 @@ export function useTeamUploads(teamId: string | null, supabaseOrNull?: SupabaseC
           .eq('id', teamId)
           .single() as { data: { vehicle_class?: string } | null }
         if (!cancelled && teamData?.vehicle_class) setTeamClass(teamData.vehicle_class)
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('team_uploads' as any)
-          .select('*, uploaded_by (first_name, last_name)')
+          .select('id, team_id, uploaded_by, document_key, file_name, storage_path, uploaded_at')
           .eq('team_id', teamId)
           .order('uploaded_at', { ascending: false })
-        if (!cancelled) setUploadedFiles((data ?? []) as unknown as UploadedFile[])
+        if (!cancelled && !error && data) {
+          const rows = data as Array<{
+            id: string
+            team_id: string
+            uploaded_by: string
+            document_key: string
+            file_name: string
+            storage_path: string
+            uploaded_at: string | null
+          }>
+          setUploadedFiles(
+            rows.map((r) => ({
+              id: r.id,
+              team_id: r.team_id,
+              uploaded_by: r.uploaded_by,
+              document_key: r.document_key,
+              file_name: r.file_name ?? '',
+              storage_path: r.storage_path ?? '',
+              uploaded_at: r.uploaded_at ?? new Date().toISOString(),
+            }))
+          )
+        } else if (!cancelled && (error || !data)) {
+          setUploadedFiles([])
+        }
       } catch (error) {
         console.error('Error fetching team/uploads:', error)
       }

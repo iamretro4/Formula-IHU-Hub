@@ -1267,7 +1267,7 @@ FROM public.dynamic_event_runs
 WHERE penalties IS NOT NULL
   AND penalties != '{}'::jsonb;
 
-COMMENT ON VIEW public.track_penalties IS 'Runs that have at least one penalty (cones, off_course, dsq). Used for admin/reports total penalties count.';
+COMMENT ON VIEW public.track_penalties IS 'Runs that have at least one penalty (cones, off_course, dsq).';
 
 GRANT SELECT ON public.track_penalties TO authenticated;
 

@@ -271,24 +271,11 @@ export default function DashboardPage() {
     }
   }
 
-  async function downloadFile(storagePath: string) {
-    if (!supabase) {
-      toast.error('Connection not available');
-      return;
-    }
-    const { data, error } = await supabase.storage.from('team-uploads').download(storagePath);
-    if (error) {
-      toast.error(`Download failed: ${error.message}`);
-      return;
-    }
-    const url = URL.createObjectURL(data);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = storagePath.split('/').pop() || 'file';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  function downloadFile(storagePath: string, fileName?: string) {
+    const params = new URLSearchParams({ path: storagePath });
+    if (fileName?.trim()) params.set('filename', fileName.trim());
+    const url = `/api/team-uploads/download?${params.toString()}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   function uploadedFile(docKey: string): UploadedFile | null {
@@ -374,7 +361,14 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <DocumentUploadTable documents={DASHBOARD_DOCUMENTS} teamClass={teamClass} />
+          <DocumentUploadTable
+            documents={DASHBOARD_DOCUMENTS}
+            teamClass={teamClass}
+            uploadedByKey={Object.fromEntries(
+              DASHBOARD_DOCUMENTS.map(d => [d.key, uploadedFile(d.key)])
+            )}
+            onDownload={(path, fileName) => downloadFile(path, fileName)}
+          />
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {DASHBOARD_DOCUMENTS
@@ -465,9 +459,12 @@ export default function DashboardPage() {
                               className="hidden"
                             />
                             {file ? (
-                              <div className="flex flex-col items-center gap-2">
+                              <div className="flex flex-col items-center gap-2 w-full min-w-0 px-2">
                                 {getFileIcon(file.name)}
-                                <span className="text-sm font-medium text-gray-700 text-center px-2 truncate max-w-full">
+                                <span
+                                  className="text-sm font-medium text-gray-700 text-center truncate w-full min-w-0"
+                                  title={file.name}
+                                >
                                   {file.name}
                                 </span>
                                 <span className="text-xs text-gray-500">
@@ -538,12 +535,12 @@ export default function DashboardPage() {
                       {/* Uploaded File Display */}
                       {uploaded && (
                         <div className="pt-3 border-t border-gray-200">
-                          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-3 p-3 bg-white rounded-lg border border-green-200 min-w-0">
+                            <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
                               <FileCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
-                                  {isVsv ? uploaded.file_name : uploaded.file_name}
+                              <div className="flex-1 min-w-0 overflow-hidden">
+                                <p className="text-sm font-medium text-gray-900 truncate" title={uploaded.file_name}>
+                                  {uploaded.file_name}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   {isVsv ? 'Link saved' : 'Uploaded'} {new Date(uploaded.uploaded_at).toLocaleDateString()}
@@ -564,7 +561,7 @@ export default function DashboardPage() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => downloadFile(uploaded.storage_path)}
+                                onClick={() => downloadFile(uploaded.storage_path, uploaded.file_name)}
                                 className="flex-shrink-0"
                               >
                                 <Download className="w-4 h-4" />

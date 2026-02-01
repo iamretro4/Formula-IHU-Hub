@@ -1,13 +1,12 @@
 'use client'
 import Image from 'next/image'
 import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import toast from 'react-hot-toast'
 import { signInSchema, SignInInput } from '@/lib/validators'
-import { Mail, Lock, LogIn, Loader2, AlertCircle, CheckCircle2, ClipboardCheck, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, LogIn, Loader2, AlertCircle, ClipboardCheck, Eye, EyeOff } from 'lucide-react'
 import getSupabaseClient, { hasSupabaseEnv } from '@/lib/supabase/client'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -16,17 +15,31 @@ export default function SignInPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const router = useRouter()
   const redirectHandled = useRef(false)
+  const formSubmitInProgress = useRef(false)
   const [logoError, setLogoError] = useState(false)
 
   const {
     register,
     handleSubmit,
     formState: { errors },
+    watch,
   } = useForm<SignInInput>({
     resolver: zodResolver(signInSchema),
   })
+
+  const emailValue = watch('email')
+  const passwordValue = watch('password')
+  const isFirstRender = useRef(true)
+
+  // Clear inline error when user edits email or password (not on initial mount)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    setError(null)
+  }, [emailValue, passwordValue])
 
   // Check if already authenticated and redirect - but only if session is truly valid
   useEffect(() => {
@@ -37,9 +50,17 @@ export default function SignInPage() {
       try {
         const supabase = getSupabaseClient()
         const { data: { user }, error } = await supabase.auth.getUser()
-        if (mounted && user && !error) {
-          window.location.assign('/dashboard')
+        if (!mounted || !user || error) return
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('login_approved')
+          .eq('id', user.id)
+          .single() as { data: { login_approved: boolean } | null }
+        if (profile && profile.login_approved === false) {
+          await supabase.auth.signOut()
+          return
         }
+        window.location.assign('/dashboard')
       } catch (err) {
         console.warn('Auth check error:', err)
       }
@@ -50,13 +71,33 @@ export default function SignInPage() {
     }, 300)
 
     const supabase = getSupabaseClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (mounted && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user && !redirectHandled.current) {
-        redirectHandled.current = true
-        setTimeout(() => {
-          window.location.assign('/dashboard')
-        }, 100)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted || (event !== 'SIGNED_IN' && event !== 'TOKEN_REFRESHED') || !session?.user || redirectHandled.current) return
+      // If the form just submitted, don't redirect or sign out here – let the form set the error or redirect
+      if (formSubmitInProgress.current) return
+      // Only redirect if we have a profile and it is approved; otherwise sign out
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select('login_approved')
+          .eq('id', session.user.id)
+          .single() as { data: { login_approved: boolean } | null; error: unknown }
+        if (profileError || !profile) {
+          await supabase.auth.signOut()
+          return
+        }
+        if (profile.login_approved === false) {
+          await supabase.auth.signOut()
+          return
+        }
+      } catch {
+        await supabase.auth.signOut()
+        return
       }
+      redirectHandled.current = true
+      setTimeout(() => {
+        window.location.assign('/dashboard')
+      }, 100)
     })
 
     return () => {
@@ -64,17 +105,17 @@ export default function SignInPage() {
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [router])
+  }, [])
 
   const onSubmit = useCallback(async (data: SignInInput) => {
     if (!hasSupabaseEnv()) {
       setError('Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local and restart the dev server.')
-      toast.error('Missing Supabase environment variables.')
       return
     }
     setIsLoading(true)
     setError(null)
     redirectHandled.current = false
+    formSubmitInProgress.current = true
 
     try {
       const supabase = getSupabaseClient()
@@ -84,8 +125,8 @@ export default function SignInPage() {
       })
       
       if (error) {
+        formSubmitInProgress.current = false
         setError(error.message || 'Invalid email or password')
-        toast.error(error.message || 'Invalid email or password')
         setIsLoading(false)
         return
       }
@@ -99,20 +140,19 @@ export default function SignInPage() {
           .single() as { data: { login_approved: boolean } | null }
         if (profile && profile.login_approved === false) {
           await supabase.auth.signOut()
+          formSubmitInProgress.current = false
           setError('Your account is pending admin approval. You will be able to sign in once an administrator approves your request.')
-          toast.error('Account pending approval')
           setIsLoading(false)
           return
         }
       }
 
-      // If we have a session immediately, wait a moment for cookies to be set, then redirect
+      // If we have a session and approved, wait a moment for cookies to be set, then redirect
       if (authData.session) {
         redirectHandled.current = true
+        formSubmitInProgress.current = false
         toast.success('Signed in successfully!')
-        // Wait a moment for cookies to be set by Supabase
         await new Promise(resolve => setTimeout(resolve, 200))
-        // Force a full page reload to ensure cookies are set and middleware sees the session
         window.location.assign('/dashboard')
         return
       }
@@ -120,20 +160,21 @@ export default function SignInPage() {
       // Fallback: wait a bit and check for session
       setTimeout(async () => {
         if (redirectHandled.current) return
-        
         const supabase = getSupabaseClient()
         const { data: { session } } = await supabase.auth.getSession()
         if (session && !redirectHandled.current) {
           redirectHandled.current = true
+          formSubmitInProgress.current = false
           toast.success('Signed in successfully!')
           window.location.assign('/dashboard')
         } else {
+          formSubmitInProgress.current = false
           setIsLoading(false)
           setError('Session not established. Please try again.')
-          toast.error('Session not established. Please try again.')
         }
       }, 1000)
     } catch (err) {
+      formSubmitInProgress.current = false
       const rawMessage = err instanceof Error ? err.message : 'An error occurred. Please try again.'
       const isNetworkError =
         rawMessage === 'Failed to fetch' ||
@@ -144,7 +185,7 @@ export default function SignInPage() {
         ? 'Cannot reach Supabase. 1) Restart the dev server (npm run dev) if you changed .env.local. 2) In Supabase Dashboard → Project Settings → General, ensure the project is not paused. 3) Check NEXT_PUBLIC_SUPABASE_URL has no typo or trailing slash.'
         : rawMessage
       setError(errorMessage)
-      toast.error(errorMessage)
+      toast.error('Something went wrong. Please try again.')
       setIsLoading(false)
     }
   }, [])
@@ -158,10 +199,10 @@ export default function SignInPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 via-white to-primary/5 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Background decoration */}
+      {/* Background decoration: soft gradient orbs only */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl"></div>
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-primary/5 rounded-full blur-3xl" />
       </div>
 
       <div className="max-w-md w-full space-y-8 relative z-10 animate-fade-in">
@@ -211,12 +252,13 @@ export default function SignInPage() {
           <form onSubmit={handleFormSubmit} className="space-y-6">
             {/* Email Field */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <label htmlFor="signin-email" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                 <Mail className="w-4 h-4 text-gray-500" />
                 Email Address
               </label>
               <div className="relative">
                 <input
+                  id="signin-email"
                   type="email"
                   {...register('email')}
                   className={`w-full px-4 py-3 pl-11 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
@@ -226,12 +268,15 @@ export default function SignInPage() {
                   }`}
                   placeholder="your.email@university.gr"
                   autoComplete="email"
+                  autoFocus
                   disabled={isLoading}
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'signin-email-error' : undefined}
                 />
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               </div>
               {errors.email && (
-                <p className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in">
+                <p id="signin-email-error" className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in" role="alert">
                   <AlertCircle className="w-4 h-4" />
                   {errors.email.message}
                 </p>
@@ -240,12 +285,13 @@ export default function SignInPage() {
 
             {/* Password Field */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <label htmlFor="signin-password" className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-gray-500" />
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="signin-password"
                   type={showPassword ? 'text' : 'password'}
                   {...register('password')}
                   className={`w-full px-4 py-3 pl-11 pr-12 rounded-lg border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20 ${
@@ -256,6 +302,8 @@ export default function SignInPage() {
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   disabled={isLoading}
+                  aria-invalid={!!errors.password}
+                  aria-describedby={errors.password ? 'signin-password-error' : undefined}
                 />
                 <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                 <button
@@ -273,7 +321,7 @@ export default function SignInPage() {
                 </button>
               </div>
               {errors.password && (
-                <p className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in">
+                <p id="signin-password-error" className="text-sm text-red-600 mt-2 flex items-center gap-1 animate-fade-in" role="alert">
                   <AlertCircle className="w-4 h-4" />
                   {errors.password.message}
                 </p>

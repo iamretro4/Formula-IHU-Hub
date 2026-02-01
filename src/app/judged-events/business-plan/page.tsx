@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState, useMemo, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { use, useEffect, useState, useMemo, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import getSupabaseClient from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Database } from '@/lib/types/database'
@@ -100,11 +100,16 @@ const scoringFormSchema = z.object({
 });
 type ScoringFormData = z.infer<typeof scoringFormSchema>;
 
-export default function BusinessPlanScore() {
-  const params = useParams<{ bookingId: string }>()
+type PageProps = {
+  params: Promise<{ bookingId: string }>
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}
+
+export default function BusinessPlanScore({ params, searchParams }: PageProps) {
+  const { bookingId: paramBookingId } = use(params)
+  use(searchParams ?? Promise.resolve({}))
   const router = useRouter()
   const { profile: authProfile } = useAuth()
-  const paramBookingId = params?.bookingId
   const supabase = useMemo(() => getSupabaseClient(), [])
   const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)

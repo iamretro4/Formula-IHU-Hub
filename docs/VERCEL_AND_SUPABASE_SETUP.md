@@ -55,9 +55,11 @@ After adding or changing variables, **redeploy** (Deployments → … → Redepl
    - **Site URL**: `https://hub.fihu.gr`
    - **Redirect URLs** – add:
      - `https://hub.fihu.gr/**`
-     - `https://hub.fihu.gr/auth/callback`
+     - `https://hub.fihu.gr/api/auth/callback` (best for email confirmation – server exchanges code)
+     - `https://hub.fihu.gr/auth/callback` (also supported – page forwards to API)
      - `https://hub.fihu.gr/auth/reset-password`
      - `http://localhost:3000/**` (for local dev)
+     - `http://localhost:3000/api/auth/callback`
      - `http://localhost:3000/auth/callback`
      - `http://localhost:3000/auth/reset-password`
 

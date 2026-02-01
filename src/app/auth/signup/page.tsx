@@ -397,76 +397,112 @@ export default function SignUpPage() {
               </div>
             </div>
 
-            {/* University & Billing */}
-            <div className="space-y-5">
-              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-                <Building2 className="w-4 h-4 text-primary" />
-                University & Billing
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-2 md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-gray-500" />
-                    University Name <span className="text-gray-400 text-xs">(optional)</span>
-                  </label>
+            {/* Role Selection — team leader checkbox (University & Billing appears below when checked) */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-lg p-5 border border-gray-200">
+              <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-gray-500" />
+                Role
+              </label>
+              <div className="space-y-3">
+                <div className="p-3 bg-white rounded-lg border border-gray-200">
                   <input
                     type="text"
-                    {...register('universityName')}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                    placeholder="e.g. International Hellenic University"
-                    disabled={isLoading}
+                    disabled
+                    value={teamLead ? 'Team Leader' : 'Viewer'}
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed text-sm font-medium"
+                    readOnly
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Faculty Advisor Name <span className="text-gray-400 text-xs">(optional)</span>
-                  </label>
+                <div className="flex items-center">
                   <input
-                    type="text"
-                    {...register('facultyAdvisorName')}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                    placeholder="Advisor full name"
+                    type="checkbox"
+                    {...register('teamLead')}
+                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2"
+                    id="teamLead"
                     disabled={isLoading}
                   />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Faculty Advisor Position <span className="text-gray-400 text-xs">(optional)</span>
+                  <label htmlFor="teamLead" className="ml-3 text-sm font-medium text-gray-700">
+                    I&rsquo;m registering as a team leader
                   </label>
-                  <input
-                    type="text"
-                    {...register('facultyAdvisorPosition')}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                    placeholder="e.g. Professor, Department Head"
-                    disabled={isLoading}
-                  />
                 </div>
-                <div className="space-y-2 md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Billing Address <span className="text-gray-400 text-xs">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    {...register('billingAddress')}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                    placeholder="Street, city, postal code, country"
-                    disabled={isLoading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    VAT ID <span className="text-gray-400 text-xs">(optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    {...register('vatId')}
-                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                    placeholder="e.g. EL123456789"
-                    disabled={isLoading}
-                  />
-                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Your role is assigned by an administrator. Team leaders have additional permissions.
+                </p>
               </div>
             </div>
+
+            {/* University & Billing — only when registering as team leader */}
+            {teamLead && (
+              <div className="space-y-5 animate-fade-in">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                  <Building2 className="w-4 h-4 text-primary" />
+                  University & Billing
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                      <Building2 className="w-4 h-4 text-gray-500" />
+                      University Name <span className="text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('universityName')}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      placeholder="e.g. International Hellenic University"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Faculty Advisor Name <span className="text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('facultyAdvisorName')}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      placeholder="Advisor full name"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Faculty Advisor Position <span className="text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('facultyAdvisorPosition')}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      placeholder="e.g. Professor, Department Head"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      Billing Address <span className="text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('billingAddress')}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      placeholder="Street, city, postal code, country"
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      VAT ID <span className="text-gray-400 text-xs">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      {...register('vatId')}
+                      className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                      placeholder="e.g. EL123456789"
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Team Selection and Campsite */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
@@ -525,40 +561,6 @@ export default function SignUpPage() {
                 <label htmlFor="campsiteStaying" className="ml-3 text-sm font-medium text-gray-700">
                   Staying at campsite
                 </label>
-              </div>
-            </div>
-
-            {/* Role Selection */}
-            <div className="bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-lg p-5 border border-gray-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                <Shield className="w-4 h-4 text-gray-500" />
-                Role
-              </label>
-              <div className="space-y-3">
-                <div className="p-3 bg-white rounded-lg border border-gray-200">
-                  <input
-                    type="text"
-                    disabled
-                    value={teamLead ? 'Team Leader' : 'Viewer'}
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-gray-100 text-gray-600 cursor-not-allowed text-sm font-medium"
-                    readOnly
-                  />
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    {...register('teamLead')}
-                    className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary focus:ring-2"
-                    id="teamLead"
-                    disabled={isLoading}
-                  />
-                  <label htmlFor="teamLead" className="ml-3 text-sm font-medium text-gray-700">
-                    I&rsquo;m registering as a team leader
-                  </label>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Your role is assigned by an administrator. Team leaders have additional permissions.
-                </p>
               </div>
             </div>
 

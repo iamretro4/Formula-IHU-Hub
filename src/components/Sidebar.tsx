@@ -10,7 +10,7 @@ import getSupabaseClient from '@/lib/supabase/client'
 import {
   LayoutDashboard, Trophy, Calendar, CalendarCheck, CheckCircle2, Flag,
   Zap, FilePenLine, FileText, Building2, MessageSquare, User, LogOut,
-  Users, Scale, FileCheck, Settings, ClipboardList, TrendingUp,
+  Users, Scale, Settings, ClipboardList, TrendingUp,
   UserCircle, LogOut as LogoutIcon, Shield, Wrench, X
 } from "lucide-react"
 
@@ -31,58 +31,60 @@ const navConfig: NavSection[] = [
   {
     label: '',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-      // Temporarily admin-only
-      { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" />, roles: ['admin'] }
+      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> }
+      // Temporarily removed: Results
+      // { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" />, roles: ['admin'] }
     ]
   },
-  {
-    label: 'SCRUTINEERING',
-    labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'],
-    hideForRoles: ['team_leader'],
-    items: [
-      { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'] },
-      { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_member'] },
-      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible'] }
-    ]
-  },
-  {
-    label: 'TRACK EVENTS',
-    labelRoles: ['admin', 'track_marshal', 'viewer'],
-    hideForRoles: ['team_leader'],
-    items: [
-      { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
-      // Temporarily admin-only
-      { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin'] }
-    ]
-  },
-  {
-    // Temporarily admin-only
-    label: 'JUDGED EVENTS',
-    labelRoles: ['admin'],
-    hideForRoles: ['team_leader'],
-    items: [
-      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin'] },
-      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin'] },
-      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />, roles: ['admin'] }
-    ]
-  },
-  {
-    label: 'TEAM FEATURES',
-    labelRoles: ['admin', 'team_member', 'inspection_responsible'],
-    hideForRoles: ['team_leader'],
-    items: [
-      { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_member', 'inspection_responsible'] }
-    ]
-  },
+  // Temporarily removed: SCRUTINEERING (Calendar, Book Inspection, Live Inspections)
+  // {
+  //   label: 'SCRUTINEERING',
+  //   labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'],
+  //   hideForRoles: ['team_leader'],
+  //   items: [
+  //     { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'] },
+  //     { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_member'] },
+  //     { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible'] }
+  //   ]
+  // },
+  // Temporarily removed: TRACK EVENTS (Track Marshal, Live Track Data)
+  // {
+  //   label: 'TRACK EVENTS',
+  //   labelRoles: ['admin', 'track_marshal', 'viewer'],
+  //   hideForRoles: ['team_leader'],
+  //   items: [
+  //     { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
+  //     { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin'] }
+  //   ]
+  // },
+  // Temporarily removed: JUDGED EVENTS (Design Event, Business Plan, Cost & Manufacturing)
+  // {
+  //   label: 'JUDGED EVENTS',
+  //   labelRoles: ['admin'],
+  //   hideForRoles: ['team_leader'],
+  //   items: [
+  //     { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin'] },
+  //     { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin'] },
+  //     { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />, roles: ['admin'] }
+  //   ]
+  // },
+  // Temporarily removed: TEAM FEATURES (Feedback Booking)
+  // {
+  //   label: 'TEAM FEATURES',
+  //   labelRoles: ['admin', 'team_member', 'inspection_responsible'],
+  //   hideForRoles: ['team_leader'],
+  //   items: [
+  //     { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_member', 'inspection_responsible'] }
+  //   ]
+  // },
   {
     label: 'ADMINISTRATION',
     labelRoles: ['admin', 'scrutineer', 'team_leader'],
     items: [
       { label: 'Admin Panel', href: '/admin', icon: <Shield className="w-5 h-5" />, roles: ['admin'] },
       { label: 'User Management', href: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin', 'team_leader'] },
-      { label: 'System Reports', href: '/admin/reports', icon: <FileCheck className="w-5 h-5" />, roles: ['admin', 'scrutineer'] },
-      { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] }
+      // Temporarily removed: Penalty Management
+      // { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] }
     ]
   },
   {

@@ -2,12 +2,10 @@
 
 import Image from 'next/image'
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
 export default function HomePage() {
-  const router = useRouter()
   const { user, loading } = useAuth()
   const [status, setStatus] = useState('Checking authentication...')
   const [logoError, setLogoError] = useState(false)
@@ -16,14 +14,13 @@ export default function HomePage() {
     if (loading) return
     if (user) {
       setStatus('Welcome back! Redirecting...')
-      router.replace('/dashboard')
-      router.refresh()
+      // Use full navigation so redirect completes reliably (e.g. after email confirmation)
+      window.location.replace('/dashboard')
       return
     }
     setStatus('Redirecting to sign in...')
-    router.replace('/auth/signin')
-    router.refresh()
-  }, [user, loading, router])
+    window.location.replace('/auth/signin')
+  }, [user, loading])
 
   return (
     <div className="flex h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-white to-primary/5">
