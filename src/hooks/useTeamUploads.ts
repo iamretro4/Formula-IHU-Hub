@@ -15,6 +15,16 @@ export type UploadedFile = {
 
 type SupabaseClient = ReturnType<typeof getSupabaseClient>
 
+type TeamUploadRow = {
+  id: string
+  team_id: string
+  uploaded_by: string
+  document_key: string
+  file_name: string
+  storage_path: string
+  uploaded_at: string | null
+}
+
 export function useTeamUploads(teamId: string | null, supabaseOrNull?: SupabaseClient | null) {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [teamClass, setTeamClass] = useState('EV')
@@ -36,15 +46,7 @@ export function useTeamUploads(teamId: string | null, supabaseOrNull?: SupabaseC
         setUploadedFiles([])
         return
       }
-      const rows = (data ?? []) as Array<{
-        id: string
-        team_id: string
-        uploaded_by: string
-        document_key: string
-        file_name: string
-        storage_path: string
-        uploaded_at: string | null
-      }>
+      const rows = (data ?? []) as unknown as TeamUploadRow[]
       setUploadedFiles(
         rows.map((r) => ({
           id: r.id,
@@ -82,15 +84,7 @@ export function useTeamUploads(teamId: string | null, supabaseOrNull?: SupabaseC
           .eq('team_id', teamId)
           .order('uploaded_at', { ascending: false })
         if (!cancelled && !error && data) {
-          const rows = data as Array<{
-            id: string
-            team_id: string
-            uploaded_by: string
-            document_key: string
-            file_name: string
-            storage_path: string
-            uploaded_at: string | null
-          }>
+          const rows = data as unknown as TeamUploadRow[]
           setUploadedFiles(
             rows.map((r) => ({
               id: r.id,
