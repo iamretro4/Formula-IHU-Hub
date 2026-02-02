@@ -8,6 +8,16 @@ import { google, drive_v3 } from 'googleapis';
 
 const ROOT_FOLDER_NAME = 'Formula IHU Uploads';
 
+/** Normalize PEM private key from env (handles \n, \\n, and line endings). */
+function normalizePrivateKey(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  return raw
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+}
+
 function getAuth() {
   const json = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -16,10 +26,12 @@ function getAuth() {
   if (json) {
     try {
       const credentials = typeof json === 'string' ? JSON.parse(json) : json;
+      const privateKey = normalizePrivateKey(credentials.private_key || '');
+      if (!privateKey) throw new Error('Missing private_key in JSON');
       return new google.auth.GoogleAuth({
         credentials: {
           client_email: credentials.client_email,
-          private_key: (credentials.private_key || '').replace(/\\n/g, '\n'),
+          private_key: privateKey,
         },
         scopes: ['https://www.googleapis.com/auth/drive.file'],
       });
@@ -29,10 +41,12 @@ function getAuth() {
   }
 
   if (email && key) {
+    const privateKey = normalizePrivateKey(key);
+    if (!privateKey) throw new Error('Missing or invalid GOOGLE_PRIVATE_KEY');
     return new google.auth.GoogleAuth({
       credentials: {
         client_email: email,
-        private_key: key.replace(/\\n/g, '\n'),
+        private_key: privateKey,
       },
       scopes: ['https://www.googleapis.com/auth/drive.file'],
     });
