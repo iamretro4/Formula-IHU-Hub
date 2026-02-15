@@ -1,10 +1,13 @@
 /**
  * Google Drive sync: ensure team subfolder exists and upload file.
- * Uses a service account. Set GOOGLE_DRIVE_ROOT_FOLDER_ID to a Shared Drive
- * folder (or Shared Drive ID) shared with the service account (Editor).
  *
- * Since service accounts have no storage quota, all files MUST be placed in
- * a Shared Drive (supportsAllDrives). A regular "My Drive" folder won't work.
+ * Authentication: Uses OAuth2 refresh token so files are created as a real
+ * user (with storage quota). Set these env vars:
+ *   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN
+ *   GOOGLE_DRIVE_ROOT_FOLDER_ID  (the folder where team subfolders go)
+ *
+ * Fallback: service account via GOOGLE_APPLICATION_CREDENTIALS_JSON
+ * (only works with Shared Drives, since service accounts have no quota).
  */
 
 import { Readable } from 'stream';
@@ -12,27 +15,16 @@ import { google, drive_v3 } from 'googleapis';
 
 /**
  * Normalize PEM private key from env.
- * Handles multiple escaping scenarios:
- *  - Vercel double-escaping: \\n → \n
- *  - Literal \n strings: \n → real newline
- *  - Windows line endings: \r\n → \n
- *  - Wrapped quotes from env var UI
  */
 function normalizePrivateKey(raw: string): string {
   if (!raw || typeof raw !== 'string') return '';
   let key = raw
-    // Strip surrounding quotes if present (some env UIs add them)
     .replace(/^["']|["']$/g, '')
-    // Handle double-escaped newlines (\\n → \n)
     .replace(/\\\\n/g, '\n')
-    // Handle escaped newlines (\n → real newline)
     .replace(/\\n/g, '\n')
-    // Normalize Windows line endings
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .trim();
-
-  // If the key somehow lost its PEM header/footer, it's invalid
   if (!key.includes('-----BEGIN')) {
     console.error('[Google Drive] Private key is missing PEM header');
     return '';
@@ -41,27 +33,34 @@ function normalizePrivateKey(raw: string): string {
 }
 
 function getAuth() {
-  const json = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY;
+  // ── Option 1: OAuth2 refresh token (personal account — recommended) ──
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
+  if (clientId && clientSecret && refreshToken) {
+    console.log('[Google Drive] Auth using OAuth2 refresh token');
+    const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+    oauth2.setCredentials({ refresh_token: refreshToken });
+    return oauth2;
+  }
+
+  // ── Option 2: Service account JSON (Shared Drives only) ──
+  const json = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (json) {
-    // Strip surrounding single/double quotes (Vercel UI or .env files may add them)
     const cleanJson = json.replace(/^['"]|['"]$/g, '');
     let credentials: { client_email?: string; private_key?: string };
     try {
       credentials = typeof cleanJson === 'string' ? JSON.parse(cleanJson) : cleanJson;
     } catch (parseErr) {
       console.error('[Google Drive] Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON:', parseErr);
-      console.error('[Google Drive] First 100 chars:', json.substring(0, 100));
       throw new Error('GOOGLE_APPLICATION_CREDENTIALS_JSON is not valid JSON');
     }
     const privateKey = normalizePrivateKey(credentials.private_key || '');
     if (!privateKey) {
-      console.error('[Google Drive] private_key is empty or invalid after normalization');
       throw new Error('Missing or invalid private_key in GOOGLE_APPLICATION_CREDENTIALS_JSON');
     }
-    console.log(`[Google Drive] Auth using JSON credentials for ${credentials.client_email}`);
+    console.log(`[Google Drive] Auth using service account: ${credentials.client_email}`);
     return new google.auth.GoogleAuth({
       credentials: {
         client_email: credentials.client_email,
@@ -71,26 +70,27 @@ function getAuth() {
     });
   }
 
+  // ── Option 3: Service account email + key pair (Shared Drives only) ──
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY;
   if (email && key) {
     const privateKey = normalizePrivateKey(key);
     if (!privateKey) throw new Error('Missing or invalid GOOGLE_PRIVATE_KEY');
+    console.log(`[Google Drive] Auth using service account email+key: ${email}`);
     return new google.auth.GoogleAuth({
-      credentials: {
-        client_email: email,
-        private_key: privateKey,
-      },
+      credentials: { client_email: email, private_key: privateKey },
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
   }
 
   throw new Error(
-    'Missing Google Drive config: set GOOGLE_APPLICATION_CREDENTIALS_JSON or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_PRIVATE_KEY'
+    'Missing Google Drive credentials. Set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_REFRESH_TOKEN ' +
+    '(for personal account), or GOOGLE_APPLICATION_CREDENTIALS_JSON (for service account + Shared Drive).'
   );
 }
 
 /**
  * Get or create a team subfolder inside the root folder.
- * All API calls use supportsAllDrives so Shared Drives work.
  */
 async function getOrCreateTeamFolder(
   drive: drive_v3.Drive,
@@ -100,7 +100,6 @@ async function getOrCreateTeamFolder(
 ): Promise<string> {
   const folderName = `${teamName || teamId} (${teamId})`;
 
-  // Find existing team subfolder
   const escapedFolderName = folderName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const teamList = await drive.files.list({
     q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${escapedFolderName}' and trashed=false`,
@@ -115,7 +114,6 @@ async function getOrCreateTeamFolder(
     return teamFolder.id;
   }
 
-  // Create team subfolder inside root
   console.log(`[Google Drive] Creating team folder: ${folderName} under ${rootFolderId}`);
   const createTeam = await drive.files.create({
     requestBody: {
@@ -147,9 +145,7 @@ export async function uploadToDrive(params: {
 
   if (!rootId) {
     throw new Error(
-      'GOOGLE_DRIVE_ROOT_FOLDER_ID is required. ' +
-      'Create a Shared Drive (or folder inside one), share it with the service account as Editor, ' +
-      'and set the folder ID in the environment.'
+      'GOOGLE_DRIVE_ROOT_FOLDER_ID is required. Set it to the Google Drive folder ID where team subfolders should be created.'
     );
   }
 
