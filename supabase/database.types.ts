@@ -1298,6 +1298,7 @@ export type Database = {
           created_at: string | null
           ehic_number: string | null
           email: string
+          email_confirmed_at: string | null
           emergency_contact: string
           faculty_advisor_name: string | null
           faculty_advisor_position: string | null
@@ -1321,6 +1322,7 @@ export type Database = {
           created_at?: string | null
           ehic_number?: string | null
           email: string
+          email_confirmed_at?: string | null
           emergency_contact: string
           faculty_advisor_name?: string | null
           faculty_advisor_position?: string | null
@@ -1344,6 +1346,7 @@ export type Database = {
           created_at?: string | null
           ehic_number?: string | null
           email?: string
+          email_confirmed_at?: string | null
           emergency_contact?: string
           faculty_advisor_name?: string | null
           faculty_advisor_position?: string | null

@@ -890,10 +890,20 @@ export default function UserManagementPage() {
                                 <span className="text-gray-300" aria-hidden>·</span>
                               </>
                             )}
-                            {user.profile_completed ? (
-                              <span className="text-green-600">Active</span>
+                            {user.email_confirmed_at ? (
+                              <span className="text-green-600">Confirmed</span>
                             ) : (
-                              <span className="text-orange-600">Incomplete</span>
+                              <span className="text-orange-600">Unconfirmed</span>
+                            )}
+                            {userRole === 'admin' && (
+                              <>
+                                <span className="text-gray-300" aria-hidden>·</span>
+                                {user.profile_completed ? (
+                                  <span className="text-green-600">Active</span>
+                                ) : (
+                                  <span className="text-orange-600">Incomplete</span>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -1024,16 +1034,30 @@ export default function UserManagementPage() {
                   </Badge>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-500">Status</p>
+                  <p className="font-medium text-gray-500">Email</p>
+                  <span className={selectedUser.email_confirmed_at ? 'text-green-600' : 'text-orange-600'}>
+                    {selectedUser.email_confirmed_at ? `Confirmed ${formatDate(selectedUser.email_confirmed_at)}` : 'Unconfirmed'}
+                  </span>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-500">Profile</p>
                   <span className={selectedUser.profile_completed ? 'text-green-600' : 'text-orange-600'}>
                     {selectedUser.profile_completed ? 'Active' : 'Incomplete'}
                   </span>
                 </div>
                 {userRole === 'admin' && (
-                  <div>
-                    <p className="font-medium text-gray-500">Team</p>
-                    <p className="text-gray-900">{selectedUser.teams ? `${selectedUser.teams.name} (${selectedUser.teams.code})` : 'No team'}</p>
-                  </div>
+                  <>
+                    <div>
+                      <p className="font-medium text-gray-500">Login Approved</p>
+                      <span className={selectedUser.login_approved ? 'text-green-600' : 'text-amber-600'}>
+                        {selectedUser.login_approved ? 'Approved' : 'Pending'}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-500">Team</p>
+                      <p className="text-gray-900">{selectedUser.teams ? `${selectedUser.teams.name} (${selectedUser.teams.code})` : 'No team'}</p>
+                    </div>
+                  </>
                 )}
                 <div>
                   <p className="font-medium text-gray-500">Joined</p>

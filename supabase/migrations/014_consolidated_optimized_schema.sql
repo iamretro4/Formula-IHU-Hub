@@ -909,9 +909,7 @@ BEGIN
 END $$;
 
 -- Teams policies (separated to avoid multiple permissive policies)
-CREATE POLICY "teams_select" ON teams FOR SELECT USING (
-    (SELECT auth.role()) = 'authenticated' OR public.is_admin()
-);
+CREATE POLICY "teams_select" ON teams FOR SELECT USING (true);
 CREATE POLICY "teams_insert" ON teams FOR INSERT WITH CHECK (public.is_admin());
 CREATE POLICY "teams_update" ON teams FOR UPDATE USING (public.is_admin());
 CREATE POLICY "teams_delete" ON teams FOR DELETE USING (public.is_admin());

@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
         campsite_staying: metadata.campsite_staying || false,
         ehic_number: metadata.ehic_number || null,
         profile_completed: true,
+        email_confirmed_at: new Date().toISOString(),
         university_name: metadata.university_name || null,
         faculty_advisor_name: metadata.faculty_advisor_name || null,
         faculty_advisor_position: metadata.faculty_advisor_position || null,
