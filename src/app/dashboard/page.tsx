@@ -215,7 +215,7 @@ export default function DashboardPage() {
         toast.success('Upload successful!', { id: uploadToast });
         await fetchUploadedFiles();
         setUploadFiles(f => ({ ...f, [docKey]: null }));
-        // Sync to Google Drive (fire-and-forget; each team has its own subfolder)
+        // Sync to Google Drive (background; each team has its own subfolder)
         fetch('/api/sync-upload-to-drive', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -225,7 +225,20 @@ export default function DashboardPage() {
             file_name: file.name,
             document_key: docKey,
           }),
-        }).catch(() => {});
+        })
+          .then(async (res) => {
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              console.error('Drive sync failed:', res.status, body);
+              toast.error(`Google Drive sync failed: ${body?.error || res.statusText}`);
+            } else {
+              toast.success('File synced to Google Drive');
+            }
+          })
+          .catch((err) => {
+            console.error('Drive sync network error:', err);
+            toast.error('Google Drive sync failed: network error');
+          });
       }
     } catch (error) {
       toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`, { id: uploadToast });

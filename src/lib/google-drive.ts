@@ -131,6 +131,7 @@ export async function uploadToDrive(params: {
   const auth = getAuth();
   const drive = google.drive({ version: 'v3', auth });
   const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null;
+  console.log(`[Google Drive] Root folder ID from env: ${rootId ?? '(not set — will use service account Drive)'}`);
 
   const teamFolderId = await getOrCreateTeamFolder(
     drive,

@@ -60,15 +60,17 @@ export async function POST(request: Request) {
     const teamName = (teamRow as { name?: string } | null)?.name ?? team_id;
 
     const mimeType = getMimeType(file_name);
-    await uploadToDrive({
+    console.log(`[Drive sync] Uploading "${file_name}" for team "${teamName}" (${team_id})`);
+    const driveResult = await uploadToDrive({
       teamId: team_id,
       teamName,
       fileBuffer: buffer,
       fileName: file_name,
       mimeType,
     });
+    console.log(`[Drive sync] Success — fileId=${driveResult.fileId}, link=${driveResult.webViewLink}`);
 
-    return NextResponse.json({ ok: true, synced: true });
+    return NextResponse.json({ ok: true, synced: true, fileId: driveResult.fileId });
   } catch (err) {
     console.error('Sync to Drive error:', err);
     return NextResponse.json(
