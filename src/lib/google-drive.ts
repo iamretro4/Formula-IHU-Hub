@@ -1,12 +1,14 @@
 /**
  * Google Drive sync: ensure team subfolder exists and upload file.
- * Uses a service account. Set GOOGLE_DRIVE_ROOT_FOLDER_ID to a folder shared with the service account (Editor).
+ * Uses a service account. Set GOOGLE_DRIVE_ROOT_FOLDER_ID to a Shared Drive
+ * folder (or Shared Drive ID) shared with the service account (Editor).
+ *
+ * Since service accounts have no storage quota, all files MUST be placed in
+ * a Shared Drive (supportsAllDrives). A regular "My Drive" folder won't work.
  */
 
 import { Readable } from 'stream';
 import { google, drive_v3 } from 'googleapis';
-
-const ROOT_FOLDER_NAME = 'Formula IHU Uploads';
 
 /**
  * Normalize PEM private key from env.
@@ -65,7 +67,7 @@ function getAuth() {
         client_email: credentials.client_email,
         private_key: privateKey,
       },
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      scopes: ['https://www.googleapis.com/auth/drive'],
     });
   }
 
@@ -77,7 +79,7 @@ function getAuth() {
         client_email: email,
         private_key: privateKey,
       },
-      scopes: ['https://www.googleapis.com/auth/drive.file'],
+      scopes: ['https://www.googleapis.com/auth/drive'],
     });
   }
 
@@ -87,60 +89,42 @@ function getAuth() {
 }
 
 /**
- * Get or create the root folder "Formula IHU Uploads" (or use GOOGLE_DRIVE_ROOT_FOLDER_ID if set).
- * Then get or create a subfolder for the team.
+ * Get or create a team subfolder inside the root folder.
+ * All API calls use supportsAllDrives so Shared Drives work.
  */
 async function getOrCreateTeamFolder(
   drive: drive_v3.Drive,
-  rootFolderId: string | null,
+  rootFolderId: string,
   teamId: string,
   teamName: string
 ): Promise<string> {
   const folderName = `${teamName || teamId} (${teamId})`;
 
-  // 1. Resolve root folder
-  let rootId = rootFolderId ?? null;
-  if (!rootId) {
-    const escapedName = ROOT_FOLDER_NAME.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    const list = await drive.files.list({
-      q: `mimeType='application/vnd.google-apps.folder' and name='${escapedName}' and trashed=false`,
-      fields: 'files(id, name)',
-      spaces: 'drive',
-    });
-    const existing = list.data.files?.[0];
-    if (existing?.id) {
-      rootId = existing.id;
-    } else {
-      const create = await drive.files.create({
-        requestBody: {
-          name: ROOT_FOLDER_NAME,
-          mimeType: 'application/vnd.google-apps.folder',
-        },
-        fields: 'id',
-      });
-      rootId = create.data.id ?? null;
-    }
-  }
-
-  if (!rootId) throw new Error('Could not get or create root folder');
-
-  // 2. Get or create team subfolder (by name + id to avoid collisions)
+  // Find existing team subfolder
   const escapedFolderName = folderName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const teamList = await drive.files.list({
-    q: `'${rootId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${escapedFolderName}' and trashed=false`,
+    q: `'${rootFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and name='${escapedFolderName}' and trashed=false`,
     fields: 'files(id, name)',
     spaces: 'drive',
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
   });
   const teamFolder = teamList.data.files?.[0];
-  if (teamFolder?.id) return teamFolder.id;
+  if (teamFolder?.id) {
+    console.log(`[Google Drive] Found existing team folder: ${folderName} (${teamFolder.id})`);
+    return teamFolder.id;
+  }
 
+  // Create team subfolder inside root
+  console.log(`[Google Drive] Creating team folder: ${folderName} under ${rootFolderId}`);
   const createTeam = await drive.files.create({
     requestBody: {
       name: folderName,
       mimeType: 'application/vnd.google-apps.folder',
-      parents: [rootId],
+      parents: [rootFolderId],
     },
     fields: 'id',
+    supportsAllDrives: true,
   });
   const id = createTeam.data.id;
   if (!id) throw new Error('Could not create team folder');
@@ -159,8 +143,17 @@ export async function uploadToDrive(params: {
 }): Promise<{ fileId: string; webViewLink?: string }> {
   const auth = getAuth();
   const drive = google.drive({ version: 'v3', auth });
-  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID || null;
-  console.log(`[Google Drive] Root folder ID from env: ${rootId ?? '(not set — will use service account Drive)'}`);
+  const rootId = process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID;
+
+  if (!rootId) {
+    throw new Error(
+      'GOOGLE_DRIVE_ROOT_FOLDER_ID is required. ' +
+      'Create a Shared Drive (or folder inside one), share it with the service account as Editor, ' +
+      'and set the folder ID in the environment.'
+    );
+  }
+
+  console.log(`[Google Drive] Root folder ID: ${rootId}`);
 
   const teamFolderId = await getOrCreateTeamFolder(
     drive,
@@ -170,6 +163,8 @@ export async function uploadToDrive(params: {
   );
 
   const mimeType = params.mimeType || 'application/octet-stream';
+  console.log(`[Google Drive] Uploading "${params.fileName}" (${mimeType}) to folder ${teamFolderId}`);
+
   const res = await drive.files.create({
     requestBody: {
       name: params.fileName,
@@ -180,6 +175,7 @@ export async function uploadToDrive(params: {
       body: Readable.from(params.fileBuffer),
     },
     fields: 'id, webViewLink',
+    supportsAllDrives: true,
   });
 
   const fileId = res.data.id;
