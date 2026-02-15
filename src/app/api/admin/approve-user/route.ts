@@ -1,5 +1,6 @@
-// Only admins can approve or reject user login requests.
-// Optionally approve a user as team leader (if they registered as team captain).
+// Admins and team leaders can approve or reject user login requests.
+// Team leaders can only approve/reject members of their own team.
+// Optionally approve a user as team leader (admin only, if they registered as team captain).
 // Sends an email to the user when their account is approved (requires RESEND_API_KEY on Vercel).
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,6 +13,7 @@ type ProfileRow = {
   app_role: string
   team_lead: boolean | null
   login_approved: boolean
+  team_id: string | null
   email?: string
   first_name?: string | null
 }
@@ -30,13 +32,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: adminProfile } = await supabase
+    const { data: callerProfile } = await supabase
       .from('user_profiles')
-      .select('app_role')
+      .select('app_role, team_id')
       .eq('id', user.id)
-      .single() as { data: { app_role: string } | null }
+      .single() as { data: { app_role: string; team_id: string | null } | null }
 
-    if (adminProfile?.app_role !== 'admin') {
+    const isAdmin = callerProfile?.app_role === 'admin'
+    const isTeamLeader = callerProfile?.app_role === 'team_leader'
+
+    if (!isAdmin && !isTeamLeader) {
       return NextResponse.json({ message: 'Forbidden' }, { status: 403 })
     }
 
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest) {
 
     const { data: targetProfile, error: fetchError } = await supabase
       .from('user_profiles')
-      .select('app_role, team_lead, login_approved, email, first_name')
+      .select('app_role, team_lead, login_approved, team_id, email, first_name')
       .eq('id', userId)
       .single() as { data: ProfileRow | null; error: unknown }
 
@@ -59,10 +64,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: 'User not found' }, { status: 404 })
     }
 
+    // Team leaders can only approve/reject members of their own team
+    if (isTeamLeader) {
+      if (!callerProfile?.team_id || targetProfile.team_id !== callerProfile.team_id) {
+        return NextResponse.json({ message: 'You can only approve members of your own team' }, { status: 403 })
+      }
+      // Team leaders cannot promote to team_leader
+      if (approveAsTeamLeader) {
+        return NextResponse.json({ message: 'Only admins can approve as team leader' }, { status: 403 })
+      }
+    }
+
     const updates: ApproveUserUpdates = {
       login_approved: loginApproved,
     }
-    if (loginApproved && approveAsTeamLeader && targetProfile.team_lead) {
+    if (loginApproved && approveAsTeamLeader && targetProfile.team_lead && isAdmin) {
       updates.app_role = 'team_leader'
     }
 

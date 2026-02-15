@@ -492,7 +492,7 @@ export default function UserManagementPage() {
   }
 
   const handleApproveUser = async (userId: string, approveAsTeamLeader: boolean) => {
-    if (userRole !== 'admin') return
+    if (userRole !== 'admin' && userRole !== 'team_leader') return
     setApprovingUserId(userId)
     try {
       const res = await fetch('/api/admin/approve-user', {
@@ -569,7 +569,7 @@ export default function UserManagementPage() {
   }
 
   const handleRejectUser = async (userId: string) => {
-    if (userRole !== 'admin') return
+    if (userRole !== 'admin' && userRole !== 'team_leader') return
     setApprovingUserId(userId)
     try {
       const res = await fetch('/api/admin/approve-user', {
@@ -880,16 +880,12 @@ export default function UserManagementPage() {
                         )}
                         <td className="py-3 px-3">
                           <div className="flex flex-wrap gap-1.5 items-center text-sm">
-                            {userRole === 'admin' && (
-                              <>
-                                {user.login_approved !== false ? (
-                                  <span className="text-green-600">Approved</span>
-                                ) : (
-                                  <span className="text-amber-600">Pending</span>
-                                )}
-                                <span className="text-gray-300" aria-hidden>·</span>
-                              </>
+                            {user.login_approved !== false ? (
+                              <span className="text-green-600">Approved</span>
+                            ) : (
+                              <span className="text-amber-600">Pending</span>
                             )}
+                            <span className="text-gray-300" aria-hidden>·</span>
                             {user.email_confirmed_at ? (
                               <span className="text-green-600">Confirmed</span>
                             ) : (
@@ -948,10 +944,10 @@ export default function UserManagementPage() {
                                   <Edit2 className="w-4 h-4 mr-2" />
                                   Edit role & team
                                 </DropdownMenuItem>
-                                {userRole === 'admin' && user.login_approved === false && (
+                                {(userRole === 'admin' || userRole === 'team_leader') && user.login_approved === false && (
                                   <>
                                     <DropdownMenuItem
-                                      onClick={() => handleApproveUser(user.id, !!(user as UserProfile).team_lead)}
+                                      onClick={() => handleApproveUser(user.id, userRole === 'admin' && !!(user as UserProfile).team_lead)}
                                       disabled={approvingUserId === user.id}
                                     >
                                       {approvingUserId === user.id ? (
@@ -959,7 +955,7 @@ export default function UserManagementPage() {
                                       ) : (
                                         <UserCheck className="w-4 h-4 mr-2" />
                                       )}
-                                      {(user as UserProfile).team_lead ? 'Approve as leader' : 'Approve'}
+                                      {userRole === 'admin' && (user as UserProfile).team_lead ? 'Approve as leader' : 'Approve'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                       onClick={() => handleRejectUser(user.id)}
