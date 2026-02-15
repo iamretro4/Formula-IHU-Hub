@@ -19,7 +19,8 @@ import {
   Loader2,
   CloudUpload,
   FileCheck,
-  ExternalLink
+  ExternalLink,
+  ShieldAlert
 } from "lucide-react"
 import getSupabaseClient from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -283,8 +284,13 @@ export default function DashboardPage() {
   }
 
   const canUpload = authUser && (
-    !authProfile?.app_role || authProfile.app_role === 'team_leader' || authProfile.app_role === 'team_member' || authProfile.app_role === 'admin'
+    authProfile?.app_role === 'team_leader' || authProfile?.app_role === 'admin'
   );
+
+  const isTeamMember = authUser && authProfile?.app_role === 'team_member';
+
+  // Team members can view the documents section (status + downloads) but not upload
+  const canViewDocuments = canUpload || isTeamMember;
 
   // Show loading or nothing if not authenticated
   // Add timeout to prevent infinite loading
@@ -348,18 +354,37 @@ export default function DashboardPage() {
         */}
       </div>
 
-      {/* Uploads Section (admins and team leaders/members) */}
-      {canUpload && (
+      {/* Uploads Section (admins, team leaders, and team members for viewing) */}
+      {canViewDocuments && (
         <div className="space-y-6">
           <div className="flex items-center gap-4 pb-3 border-b-2 border-gray-200">
             <div className="p-3 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl shadow-md ring-2 ring-primary/10">
               <CloudUpload className="w-7 h-7 text-primary" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Upload Required Documents</h2>
-              <p className="text-sm text-gray-600 mt-1">Upload your team&rsquo;s required documentation</p>
+              <h2 className="text-2xl font-bold text-gray-900">
+                {canUpload ? 'Upload Required Documents' : 'Required Documents'}
+              </h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {canUpload
+                  ? "Upload your team\u2019s required documentation"
+                  : "View your team\u2019s document submission status"}
+              </p>
             </div>
           </div>
+
+          {/* Notice for team members */}
+          {isTeamMember && (
+            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-amber-900">Upload restricted to Team Leaders</p>
+                <p className="text-sm text-amber-700 mt-0.5">
+                  Only team leaders can upload or update documents. Contact your team leader if a document needs to be submitted or replaced.
+                </p>
+              </div>
+            </div>
+          )}
 
           <DocumentUploadTable
             documents={DASHBOARD_DOCUMENTS}
@@ -370,6 +395,7 @@ export default function DashboardPage() {
             onDownload={(path, fileName) => downloadFile(path, fileName)}
           />
 
+          {canUpload && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {DASHBOARD_DOCUMENTS
               .filter(doc => !teamClass || doc.classes.includes(teamClass))
@@ -575,6 +601,7 @@ export default function DashboardPage() {
                 )
               })}
           </div>
+          )}
         </div>
       )}
 

@@ -44,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const syncedProfileForUser = useRef<string | null>(null)
+  const signingOut = useRef(false)
 
   const supabase = useMemo(() => {
     if (typeof window === 'undefined') return null
@@ -94,12 +95,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!supabase) return
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
+        signingOut.current = true
         setUser(null)
         setProfile(null)
         syncedProfileForUser.current = null
         return
       }
-      if (session?.user) {
+      signingOut.current = false
+      if (session?.user && !signingOut.current) {
         setUser(session.user)
         fetchProfile(supabase, session.user.id, setProfile)
       } else {
@@ -113,11 +116,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // When user has a session but profile_completed is false (e.g. confirmed via Site URL, never hit callback), sync once
   useEffect(() => {
+    if (signingOut.current) return
     if (!user || !profile || profile.profile_completed !== false) return
     if (syncedProfileForUser.current === user.id) return
     syncedProfileForUser.current = user.id
     syncProfileFromAuth().then((ok) => {
-      if (ok && supabase) fetchProfile(supabase, user.id, setProfile)
+      if (ok && supabase && !signingOut.current) fetchProfile(supabase, user.id, setProfile)
     })
   }, [user, profile, supabase])
 

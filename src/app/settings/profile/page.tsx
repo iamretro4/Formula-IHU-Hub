@@ -70,6 +70,7 @@ export default function ProfilePage() {
       })
     }
 
+    let cancelled = false
     const loadTeams = async () => {
       setLoadingTeams(true)
       try {
@@ -78,7 +79,11 @@ export default function ProfilePage() {
           .select('id, name, code, vehicle_class')
           .order('name')
 
+        if (cancelled) return
+
         if (teamsError) {
+          // Ignore abort errors (expected during sign-out)
+          if (teamsError.message?.includes('AbortError') || teamsError.code === 'ABORT_ERR') return
           logger.error('Failed to load teams', teamsError, { context: 'profile_page' })
           toast.error(`Failed to load teams: ${teamsError.message}`)
           setError(teamsError.message)
@@ -86,15 +91,21 @@ export default function ProfilePage() {
           setTeams((teamsData || []) as Team[])
         }
       } catch (err) {
+        if (cancelled) return
+        // Ignore abort errors (expected during sign-out)
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        if (err instanceof Error && err.message?.includes('AbortError')) return
         const errMsg = err instanceof Error ? err.message : 'Unknown error'
         logger.error('Error loading teams', err, { context: 'profile_page' })
         toast.error(`Failed to load teams: ${errMsg}`)
         setError(errMsg)
       } finally {
-        setLoadingTeams(false)
+        if (!cancelled) setLoadingTeams(false)
       }
     }
     loadTeams()
+
+    return () => { cancelled = true }
   }, [authProfile, authLoading, user, router, supabase])
 
   const handleSubmit = async (e: React.FormEvent) => {

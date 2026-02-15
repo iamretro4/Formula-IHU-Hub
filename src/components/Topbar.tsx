@@ -66,6 +66,8 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         .limit(20)
 
       if (error) {
+        // Ignore abort errors (expected during sign-out)
+        if (error.message?.includes('AbortError') || error.code === 'ABORT_ERR') return
         logger.error('Failed to fetch notifications', error, { context: 'topbar' })
         return
       }
@@ -74,6 +76,9 @@ export function Topbar({ onMenuClick }: TopbarProps) {
       setNotifications(notificationsData)
       setUnreadCount(notificationsData.filter(n => !n.read).length)
     } catch (error) {
+      // Ignore abort errors (expected during sign-out)
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      if (error instanceof Error && error.message?.includes('AbortError')) return
       logger.error('Error fetching notifications', error, { context: 'topbar' })
     } finally {
       setLoadingNotifications(false)
