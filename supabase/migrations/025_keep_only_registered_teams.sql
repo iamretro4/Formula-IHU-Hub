@@ -24,7 +24,8 @@ DECLARE
     'DRT',      -- DRT / Democritus Racing Team
     'PRT',      -- Poseidon / Poseidon Racing Team
     'FUF',      -- FUF / fufracingteam
-    'DAEDALUS'  -- Daedalus / Daedalus Racing Team
+    'DAEDALUS', -- Daedalus / Daedalus Racing Team
+    'GLR'       -- Green Lion Racing
   ];
 BEGIN
   -- 1. Unlink user profiles that belong to teams being removed
