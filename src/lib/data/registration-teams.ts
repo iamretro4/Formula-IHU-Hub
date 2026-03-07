@@ -46,6 +46,7 @@ export const REGISTRATION_TEAMS: RegistrationTeamOption[] = [
   { name: 'fufracingteam', category: 'registered' },
   { name: 'Daedalus Racing Team', category: 'registered' },
   { name: 'Green Lion Racing', category: 'registered' },
+  { name: 'PUT Motorsport Electric', category: 'registered' },
 ]
 
 /** Category order for the dropdown. */
