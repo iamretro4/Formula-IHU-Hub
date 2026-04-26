@@ -86,9 +86,9 @@ export default function FeedbackBookingPage() {
   const [teamId, setTeamId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string | null>(null)
 
-  // Team leaders only get User Management; redirect if they hit feedback
+  // Team leaders and simple team members shouldn't access feedback directly
   useEffect(() => {
-    if (profile?.app_role === 'team_leader') {
+    if (profile?.app_role === 'team_leader' || profile?.app_role === 'team_member') {
       router.replace('/dashboard')
     }
   }, [profile?.app_role, router])
@@ -471,16 +471,20 @@ export default function FeedbackBookingPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 animate-fade-in min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-          <MessageSquare className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
-          Feedback Appointments
-        </h1>
-        <p className="text-gray-600 max-w-2xl">
-          Book feedback sessions with judges for approved scoring events
-        </p>
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <MessageSquare className="w-6 h-6 text-indigo-600" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+            Feedback <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Appointments</span>
+          </h1>
+          <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+            Judge Session Booking & Schedule Management
+          </p>
+        </div>
       </div>
 
       {/* Error Alert */}

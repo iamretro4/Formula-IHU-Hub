@@ -30,7 +30,8 @@ import {
   TrendingUp,
   Award,
   ArrowLeft,
-  Plus
+  Plus,
+  Calculator
 } from 'lucide-react'
 import { Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -107,11 +108,7 @@ export default function TrackLivePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
 
-  // Temporarily admin-only
-  useEffect(() => {
-    if (authProfile === undefined) return
-    if (authProfile?.app_role !== 'admin') router.replace('/dashboard')
-  }, [authProfile, router])
+  // Live track data is now visible to all roles
   const [teams, setTeams] = useState<Team[]>([])
   const [allRuns, setAllRuns] = useState<Run[]>([])
   const [stats, setStats] = useState({ 
@@ -132,6 +129,8 @@ export default function TrackLivePage() {
   const [editRunData, setEditRunData] = useState<{ time: string; status: RunStatus }>({ time: '', status: 'completed' })
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [isCalculating, setIsCalculating] = useState<boolean>(false)
+  const [selectedClass, setSelectedClass] = useState<'ALL' | 'EV' | 'CV'>('ALL')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
@@ -157,7 +156,7 @@ export default function TrackLivePage() {
 
       const { data: teamsData, error: teamsErr } = await supabase
         .from('teams')
-        .select('id, code, name')
+        .select('id, code, name, vehicle_class')
         .order('code')
       if (teamsErr) throw teamsErr
       setTeams(teamsData || [])
@@ -214,7 +213,18 @@ export default function TrackLivePage() {
     return () => { active = false }
   }, [fetchAll])
 
-  const visibleRuns = allRuns.filter(run => run.event_type === activeTab)
+  const filteredTeams = useMemo(() => {
+    if (selectedClass === 'ALL') return teams
+    return teams.filter(t => t.vehicle_class === selectedClass)
+  }, [teams, selectedClass])
+
+  const visibleRuns = useMemo(() => {
+    let runs = allRuns.filter(run => run.event_type === activeTab)
+    if (selectedClass !== 'ALL') {
+      runs = runs.filter(run => run.teams?.vehicle_class === selectedClass)
+    }
+    return runs
+  }, [allRuns, activeTab, selectedClass])
 
   // Pagination slicing
   const pagedRuns = visibleRuns.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -288,6 +298,24 @@ export default function TrackLivePage() {
 
       await fetchAll()
       toast.success('Run added successfully')
+      
+      // 🔔 Discord: New run recorded
+      const selectedTeam = teams.find(t => t.id === inputRun.teamId)
+      fetch('/api/discord/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'new_run',
+          teamCode: selectedTeam?.code || '??',
+          teamName: selectedTeam?.name || 'Unknown',
+          event: activeTab,
+          runNumber: inputRun.runNumber,
+          rawTime: inputRun.status === 'completed' ? +inputRun.time : null,
+          status: inputRun.status,
+          vehicleClass: selectedTeam?.vehicle_class || undefined,
+        }),
+      }).catch(() => {})
+      
       setInputRun({ teamId: '', runNumber: 1, time: '', status: 'completed' })
     } catch (e: any) {
       const errorMsg = e.message || 'Failed to add run'
@@ -379,7 +407,7 @@ export default function TrackLivePage() {
   const activeEvent = DYNAMIC_EVENTS.find(e => e.key === activeTab)
   const isAdmin = authProfile?.app_role === 'admin'
 
-  if (authProfile === undefined || !isAdmin) {
+  if (authProfile === undefined) {
     return (
       <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto flex flex-col items-center justify-center min-h-[40vh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
@@ -392,75 +420,129 @@ export default function TrackLivePage() {
     <ErrorBoundary>
       <div className="p-4 sm:p-6 md:p-8 space-y-6 animate-fade-in min-h-screen">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
-              Live Track Data
-            </h1>
-            <p className="text-gray-600 mt-2 max-w-xl">
-              View, add, edit, and manage dynamic event runs
-            </p>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+              <Activity className="w-6 h-6 text-indigo-600" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+                Live Track <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Data</span>
+              </h1>
+              <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+                Dynamic Event Telemetry & Scoring Node
+              </p>
+            </div>
           </div>
-          <Button asChild variant="outline" className="gap-2">
-            <Link href="/track">
-              <ArrowLeft className="w-4 h-4" />
-              Back to Track
-            </Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            {isAdmin && (
+              <Button 
+                onClick={async () => {
+                  setIsCalculating(true)
+                  try {
+                    const { error } = await supabase.rpc('calculate_dynamic_results', { p_event_type: activeTab })
+                    if (error) throw error
+                    toast.success('Scoring updated!')
+                    await fetchAll()
+                    // 🔔 Discord: Scoring recalculated
+                    fetch('/api/discord/notify', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        type: 'scoring_updated',
+                        eventType: activeTab,
+                      }),
+                    }).catch(() => {})
+                  } catch (e: any) {
+                    toast.error(e.message || 'Calculation failed')
+                  } finally {
+                    setIsCalculating(false)
+                  }
+                }}
+                disabled={isCalculating}
+                variant="outline"
+                className="gap-2 rounded-xl h-9 px-3"
+              >
+                {isCalculating ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500" /> : <Calculator className="w-3.5 h-3.5 text-indigo-500" />}
+                <span className="font-bold uppercase text-[9px] tracking-widest">Recalculate</span>
+              </Button>
+            )}
+            <Button asChild variant="outline" className="gap-2 rounded-xl h-9 px-3">
+              <Link href="/track">
+                <ArrowLeft className="w-3.5 h-3.5 text-gray-400" />
+                <span className="font-bold uppercase text-[9px] tracking-widest">Back</span>
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        {/* Class Selector & Search */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+          <Tabs 
+            value={selectedClass} 
+            onValueChange={(v) => setSelectedClass(v as any)}
+            className="w-full md:w-auto"
+          >
+            <TabsList className="grid grid-cols-3 w-[300px]">
+              <TabsTrigger value="ALL">All Classes</TabsTrigger>
+              <TabsTrigger value="EV" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">EV</TabsTrigger>
+              <TabsTrigger value="CV" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">CV</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <Card className="shadow-md border-gray-200">
-            <CardContent className="pt-6">
+          <Card className="border-none shadow-xl bg-white overflow-hidden rounded-[1.5rem] ring-1 ring-gray-100 transition-all hover:shadow-blue-500/10 group">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Total Runs</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.totalRuns}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Runs</p>
+                  <p className="text-2xl font-black text-gray-900 tracking-tight">{stats.totalRuns}</p>
                 </div>
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <Activity className="w-6 h-6 text-blue-600" />
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center border border-blue-100 group-hover:scale-110 transition-transform">
+                  <Activity className="w-5 h-5 text-blue-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="shadow-md border-gray-200">
-            <CardContent className="pt-6">
+          <Card className="border-none shadow-xl bg-white overflow-hidden rounded-[1.5rem] ring-1 ring-gray-100 transition-all hover:shadow-green-500/10 group">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Completed</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.completedRuns}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Completed</p>
+                  <p className="text-2xl font-black text-gray-900 tracking-tight">{stats.completedRuns}</p>
                 </div>
-                <div className="p-3 bg-green-100 rounded-full">
-                  <CheckCircle2 className="w-6 h-6 text-green-600" />
+                <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center border border-green-100 group-hover:scale-110 transition-transform">
+                  <CheckCircle2 className="w-5 h-5 text-green-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="shadow-md border-gray-200">
-            <CardContent className="pt-6">
+          <Card className="border-none shadow-xl bg-white overflow-hidden rounded-[1.5rem] ring-1 ring-gray-100 transition-all hover:shadow-purple-500/10 group">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Teams</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.teamsParticipating}</p>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Teams</p>
+                  <p className="text-2xl font-black text-gray-900 tracking-tight">{stats.teamsParticipating}</p>
                 </div>
-                <div className="p-3 bg-purple-100 rounded-full">
-                  <Users className="w-6 h-6 text-purple-600" />
+                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center border border-purple-100 group-hover:scale-110 transition-transform">
+                  <Users className="w-5 h-5 text-purple-500" />
                 </div>
               </div>
             </CardContent>
           </Card>
-          <Card className="shadow-md border-gray-200">
-            <CardContent className="pt-6">
+          <Card className="border-none shadow-xl bg-white overflow-hidden rounded-[1.5rem] ring-1 ring-gray-100 transition-all hover:shadow-orange-500/10 group">
+            <CardContent className="p-5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 font-medium">Avg Time</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Avg Time</p>
+                  <p className="text-2xl font-black text-gray-900 tracking-tight">
                     {stats.averageTime > 0 ? formatTime(stats.averageTime) : 'N/A'}
                   </p>
                 </div>
-                <div className="p-3 bg-orange-100 rounded-full">
-                  <Timer className="w-6 h-6 text-orange-600" />
+                <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center border border-orange-100 group-hover:scale-110 transition-transform">
+                  <Timer className="w-5 h-5 text-orange-500" />
                 </div>
               </div>
             </CardContent>
@@ -532,11 +614,17 @@ export default function TrackLivePage() {
                                 <SelectValue placeholder="Select Team" />
                               </SelectTrigger>
                               <SelectContent>
-                                {teams.map(team => (
+                                {filteredTeams.map(team => (
                                   <SelectItem key={team.id} value={team.id}>
                                     <div className="flex items-center gap-2">
-                                      <Badge variant="outline" className="text-xs">{team.code}</Badge>
-                                      {team.name}
+                                      <Badge 
+                                        variant="outline" 
+                                        className={`text-[10px] px-1 h-4 ${team.vehicle_class === 'EV' ? 'border-blue-200 text-blue-700' : 'border-orange-200 text-orange-700'}`}
+                                      >
+                                        {team.vehicle_class}
+                                      </Badge>
+                                      <Badge variant="outline" className="text-xs font-mono">{team.code}</Badge>
+                                      <span className="truncate">{team.name}</span>
                                     </div>
                                   </SelectItem>
                                 ))}
@@ -621,21 +709,21 @@ export default function TrackLivePage() {
                             return (
                               <Card key={teamId} className="border-gray-200 shadow-md hover:shadow-lg transition-shadow">
                                 <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                    <div className="flex items-center gap-3">
-                                      <Badge variant="outline" className="text-base font-bold px-3 py-1">
+                                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                                      <Badge variant="outline" className="text-base font-bold px-3 py-1 flex-shrink-0">
                                         {team?.code || teamId}
                                       </Badge>
-                                      <div>
-                                        <p className="font-semibold text-gray-900">{team?.name || 'Unknown Team'}</p>
-                                        <p className="text-xs text-gray-500">{runs.length} run{runs.length !== 1 ? 's' : ''}</p>
+                                      <div className="min-w-0 flex-1">
+                                        <p className="font-bold text-gray-900 truncate" title={team?.name}>{team?.name || 'Unknown Team'}</p>
+                                        <p className="text-xs text-gray-500 font-medium">{runs.length} run{runs.length !== 1 ? 's' : ''}</p>
                                       </div>
                                     </div>
                                     {bestRun && (
-                                      <div className="flex items-center gap-2">
-                                        <Award className="w-5 h-5 text-yellow-500" />
-                                        <span className="text-sm text-gray-600">Best:</span>
-                                        <Badge className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-bold text-base px-3 py-1">
+                                      <div className="flex items-center gap-2 flex-shrink-0 bg-white/50 px-3 py-1.5 rounded-lg border border-yellow-200/50 shadow-sm">
+                                        <Award className="w-4 h-4 text-yellow-500" />
+                                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Best Run:</span>
+                                        <Badge className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white font-black text-sm px-3 py-0.5">
                                           {formatTime(bestRun.raw_time)}
                                         </Badge>
                                       </div>

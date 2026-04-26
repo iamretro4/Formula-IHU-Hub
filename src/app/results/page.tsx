@@ -48,6 +48,9 @@ type DynamicResult = {
   best_corrected_time: number | null
   best_raw_time: number | null
   points: number | null
+  tmin?: number | null
+  tmax?: number | null
+  status?: string
 }
 
 type StaticResult = {
@@ -98,11 +101,7 @@ export default function ResultsPage() {
   const [activeStaticEvTab, setActiveStaticEvTab] = useState('Design')
   const [activeStaticCvTab, setActiveStaticCvTab] = useState('Design')
 
-  // Temporarily admin-only
-  useEffect(() => {
-    if (profile === undefined) return
-    if (profile?.app_role !== 'admin') router.replace('/dashboard')
-  }, [profile, router])
+  // Competition results are now visible to all roles
 
   const isAdmin = profile?.app_role === 'admin'
 
@@ -196,6 +195,9 @@ export default function ResultsPage() {
             best_corrected_time: bestTimes?.corrected || r.best_time || null,
             best_raw_time: bestTimes?.raw || null,
             points: r.points || null,
+            tmin: r.tmin,
+            tmax: r.tmax,
+            status: r.status
           }
         })
         
@@ -216,6 +218,9 @@ export default function ResultsPage() {
             best_corrected_time: bestTimes?.corrected || r.best_time || null,
             best_raw_time: bestTimes?.raw || null,
             points: r.points || null,
+            tmin: r.tmin,
+            tmax: r.tmax,
+            status: r.status
           }
         })
       }
@@ -562,50 +567,102 @@ export default function ResultsPage() {
     }
 
     return (
-      <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-        <table className="w-full table-auto text-sm">
-          <thead>
-            <tr className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-b-2 border-primary/20">
-              <th className="px-4 py-3 text-left font-bold text-gray-700">Rank</th>
-              <th className="px-4 py-3 text-left font-bold text-gray-700">Team</th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-600">Corrected Time</th>
-              <th className="px-4 py-3 text-center font-semibold text-gray-600">Raw Time</th>
-              <th className="px-4 py-3 text-center font-bold text-gray-700">Points</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {sortedRows.map((row, idx) => {
-              const rank = idx + 1
-              return (
-                <tr key={row.team_code} className={`transition-all duration-200 ${getRankBgColor(rank)}`}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      {getRankIcon(rank)}
-                      <span className="font-bold text-gray-700">{rank}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <div className="font-semibold text-gray-900">{row.team_code}</div>
-                      <div className="text-xs text-gray-500">{row.team_name}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <Badge variant="outline" className="font-mono">
-                      {row.best_corrected_time?.toFixed(3) ?? '-'}s
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="text-gray-600 font-mono">{row.best_raw_time?.toFixed(3) ?? '-'}s</span>
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="font-bold text-lg text-primary">{row.points?.toFixed(2) ?? '0.00'}</span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="space-y-6">
+        {/* Podium for Dynamic Event */}
+        {sortedRows.length >= 3 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4">
+            {/* 2nd Place */}
+            <Card className="order-2 md:order-1 bg-gradient-to-br from-gray-50 to-gray-200/50 border-gray-300 shadow-sm relative overflow-hidden scale-95 mt-4">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><Medal className="w-16 h-16" /></div>
+              <CardContent className="pt-6 text-center">
+                <Badge variant="outline" className="mb-2">2ND PLACE</Badge>
+                <h4 className="text-xl font-bold">{sortedRows[1].team_code}</h4>
+                <p className="text-xs text-gray-500 mb-2 truncate">{sortedRows[1].team_name}</p>
+                <div className="text-2xl font-black text-gray-700">{sortedRows[1].points?.toFixed(2)}</div>
+              </CardContent>
+            </Card>
+            
+            {/* 1st Place */}
+            <Card className="order-1 md:order-2 bg-gradient-to-br from-yellow-100 to-yellow-500/10 border-yellow-400 shadow-lg relative overflow-hidden ring-2 ring-yellow-400/20">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><Trophy className="w-20 h-20" /></div>
+              <CardContent className="pt-8 text-center bg-white/40 backdrop-blur-sm h-full">
+                <div className="bg-yellow-400 text-yellow-900 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block mb-2">WINNER</div>
+                <h4 className="text-2xl font-black text-yellow-900">{sortedRows[0].team_code}</h4>
+                <p className="text-sm text-gray-600 mb-3 truncate font-medium">{sortedRows[0].team_name}</p>
+                <div className="text-4xl font-black text-yellow-600 drop-shadow-sm">{sortedRows[0].points?.toFixed(2)}</div>
+                <Trophy className="w-8 h-8 text-yellow-500 mx-auto mt-2 animate-bounce" />
+              </CardContent>
+            </Card>
+
+            {/* 3rd Place */}
+            <Card className="order-3 md:order-3 bg-gradient-to-br from-amber-50 to-amber-200/50 border-amber-300 shadow-sm relative overflow-hidden scale-90 mt-6">
+              <div className="absolute top-0 right-0 p-2 opacity-10"><Award className="w-16 h-16" /></div>
+              <CardContent className="pt-6 text-center">
+                <Badge variant="outline" className="mb-2">3RD PLACE</Badge>
+                <h4 className="text-xl font-bold">{sortedRows[2].team_code}</h4>
+                <p className="text-xs text-gray-500 mb-2 truncate">{sortedRows[2].team_name}</p>
+                <div className="text-2xl font-black text-amber-800">{sortedRows[2].points?.toFixed(2)}</div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
+          <table className="w-full table-auto text-sm">
+            <thead>
+              <tr className="bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 border-b-2 border-primary/20">
+                <th className="px-4 py-3 text-left font-bold text-gray-700">Rank</th>
+                <th className="px-4 py-3 text-left font-bold text-gray-700">Team</th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-600">Corrected Time</th>
+                <th className="px-4 py-3 text-center font-semibold text-gray-600">Reference (Tbest/Tmax)</th>
+                <th className="px-4 py-3 text-center font-bold text-gray-700">Points</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {sortedRows.map((row, idx) => {
+                const rank = idx + 1
+                return (
+                  <tr key={row.team_code} className={`transition-all duration-200 ${getRankBgColor(rank)}`}>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        {getRankIcon(rank)}
+                        <span className="font-bold text-gray-700">{rank}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <div className="font-semibold text-gray-900">{row.team_code}</div>
+                        <div className="text-xs text-gray-500 truncate max-w-[200px]">{row.team_name}</div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex flex-col items-center">
+                        <Badge variant="outline" className="font-mono bg-white">
+                          {row.best_corrected_time?.toFixed(3) ?? '-'}s
+                        </Badge>
+                        {row.best_raw_time && row.best_raw_time !== row.best_corrected_time && (
+                          <span className="text-[10px] text-red-500 font-medium">Raw: {row.best_raw_time.toFixed(3)}s</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {row.tmin ? (
+                        <div className="text-xs text-gray-500 font-medium font-mono">
+                          {row.tmin.toFixed(3)} / {row.tmax?.toFixed(3)}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className="font-black text-xl text-primary drop-shadow-sm">{row.points?.toFixed(2) ?? '0.00'}</span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     )
   }
@@ -661,7 +718,7 @@ export default function ResultsPage() {
     )
   }
 
-  if (profile === undefined || !isAdmin) {
+  if (profile === undefined) {
     return (
       <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto flex flex-col items-center justify-center min-h-[40vh]">
         <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
@@ -671,27 +728,40 @@ export default function ResultsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto space-y-6 animate-fade-in">
+    <div className="p-4 sm:p-6 md:p-8 max-w-screen-xl mx-auto space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Trophy className="w-8 h-8 text-primary" />
-            Competition Results
-          </h1>
-          <p className="text-gray-600 mt-2">View standings and scores for all events</p>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+            <Trophy className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+              Competition <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Standings</span>
+            </h1>
+            <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+              Real-time Scoring Intelligence & Event Rankings
+            </p>
+          </div>
         </div>
-        {error && (
-          <Button
-            onClick={fetchAll}
-            variant="outline"
-            className="gap-2"
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Retry
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {error && (
+            <Button
+              onClick={fetchAll}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              Retry Sync
+            </Button>
+          )}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 border border-gray-200">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Live Updates Enabled</span>
+          </div>
+        </div>
       </div>
 
       {/* Error State */}

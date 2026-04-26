@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import getSupabaseClient from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,6 +42,8 @@ import {
   Users,
   Activity,
   Minus,
+  FilePenLine,
+  ShieldAlert,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { logger } from '@/lib/utils/logger'
@@ -110,7 +111,6 @@ export default function PenaltyManagementPage() {
   const supabase = useMemo(() => getSupabaseClient(), [])
   const router = useRouter()
   const effectRunIdRef = useRef(0)
-  const [activeTab, setActiveTab] = useState<'rules' | 'create' | 'review'>('rules')
   const [rules, setRules] = useState<PenaltyRule[]>([])
   const [incidents, setIncidents] = useState<TrackIncident[]>([])
   const [allIncidents, setAllIncidents] = useState<TrackIncident[]>([])
@@ -125,6 +125,7 @@ export default function PenaltyManagementPage() {
   const [severityFilter, setSeverityFilter] = useState<string>('all')
   const [selectedIncident, setSelectedIncident] = useState<TrackIncident | null>(null)
   const [incidentDialogOpen, setIncidentDialogOpen] = useState(false)
+  const [createRuleDialogOpen, setCreateRuleDialogOpen] = useState(false)
 
   const [newRule, setNewRule] = useState({
     name: '',
@@ -413,6 +414,15 @@ export default function PenaltyManagementPage() {
           }
           
           toast.success(`Penalties applied successfully to ${updated} runs`)
+          // 🔔 Discord: Penalties applied
+          fetch('/api/discord/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              type: 'penalties_applied',
+              appliedCount: updated,
+            }),
+          }).catch(() => {})
         } else {
           throw error
         }
@@ -427,6 +437,26 @@ export default function PenaltyManagementPage() {
       logger.error('[Penalty Management] Error applying penalties', e)
     } finally {
       setIsApplying(false)
+    }
+  }
+
+  const handleDeleteIncident = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this incident? This action cannot be undone.')) return
+    
+    try {
+      const { error } = await supabase
+        .from('track_incidents')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
+      
+      toast.success('Incident deleted successfully')
+      loadData(true)
+    } catch (e: unknown) {
+      const error = e instanceof Error ? e : new Error('Unknown error')
+      toast.error(`Failed to delete incident: ${error.message}`)
+      logger.error('[Penalty Management] Error deleting incident', e)
     }
   }
 
@@ -542,19 +572,23 @@ export default function PenaltyManagementPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 animate-fade-in min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="space-y-2">
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Scale className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
-            Penalty Management
-          </h1>
-          <p className="text-gray-600 max-w-2xl">
-            Manage penalty rules and review track incidents
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+            <ShieldAlert className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+              Strategic <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Compliance</span>
+            </h1>
+            <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+              Judicial Oversight & Track Incident Intelligence
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <Button
             onClick={() => loadData(true)}
             disabled={refreshing || loading}
@@ -566,7 +600,12 @@ export default function PenaltyManagementPage() {
             Refresh
           </Button>
           {userRole === 'admin' && (
-            <Button onClick={applyPenalties} disabled={loading || isApplying} className="gap-2">
+            <>
+              <Button onClick={() => setCreateRuleDialogOpen(true)} variant="outline" className="gap-2">
+                <FilePenLine className="w-4 h-4" />
+                Custom Penalty
+              </Button>
+              <Button onClick={applyPenalties} disabled={loading || isApplying} className="gap-2">
               {isApplying ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -579,11 +618,11 @@ export default function PenaltyManagementPage() {
                 </>
               )}
             </Button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Error Alert */}
       {error && (
         <Alert variant="destructive">
           <AlertTriangle className="w-4 h-4" />
@@ -591,392 +630,7 @@ export default function PenaltyManagementPage() {
         </Alert>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Rules</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalRules}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm">
-                <FileText className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Active Rules</p>
-                <p className="text-3xl font-bold text-green-600">{stats.activeRules}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-green-600 shadow-sm">
-                <CheckCircle2 className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Total Incidents</p>
-                <p className="text-3xl font-bold text-gray-900">{stats.totalIncidents}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 shadow-sm">
-                <AlertTriangle className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Safety Incidents</p>
-                <p className="text-3xl font-bold text-red-600">{stats.safetyIncidents}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-red-500 to-red-600 shadow-sm">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="shadow-md border-gray-200">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 mb-1">Critical</p>
-                <p className="text-3xl font-bold text-orange-600">{stats.criticalIncidents}</p>
-              </div>
-              <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 shadow-sm">
-                <XCircle className="w-6 h-6 text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'rules' | 'create' | 'review')}>
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="rules" className="gap-2">
-            <FileText className="w-4 h-4" />
-            Penalty Rules
-          </TabsTrigger>
-          <TabsTrigger value="create" className="gap-2">
-            <Plus className="w-4 h-4" />
-            Create Rule
-          </TabsTrigger>
-          <TabsTrigger value="review" className="gap-2">
-            <Eye className="w-4 h-4" />
-            Incident Review
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Rules Tab */}
-        <TabsContent value="rules" className="space-y-4">
-          <Card className="shadow-lg border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                Active Penalty Rules
-              </CardTitle>
-              <CardDescription>
-                Manage and configure penalty rules for track events
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              {rules.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                  <p className="text-gray-500 font-medium text-lg mb-2">No penalty rules</p>
-                  <p className="text-sm text-gray-400">Create your first penalty rule to get started</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Rule Name</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Event</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Incident Type</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Penalty</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Max Count</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rules.map((rule) => {
-                        const eventInfo = getEventInfo(rule.event_type)
-                        const EventIcon = eventInfo.icon
-                        return (
-                          <tr key={rule.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                            <td className="py-4 px-4">
-                              <div>
-                                <p className="font-medium text-gray-900">{rule.name || rule.rule_type}</p>
-                                {rule.description && (
-                                  <p className="text-sm text-gray-500 mt-1">{rule.description}</p>
-                                )}
-                              </div>
-                            </td>
-                            <td className="py-4 px-4">
-                              <Badge variant="outline" className="gap-1">
-                                <EventIcon className="w-3 h-3" />
-                                {eventInfo.label}
-                              </Badge>
-                            </td>
-                            <td className="py-4 px-4">
-                              {rule.condition?.incident_type && (
-                                <Badge className={getIncidentTypeInfo(rule.condition.incident_type).color}>
-                                  {getIncidentTypeInfo(rule.condition.incident_type).label}
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="py-4 px-4">
-                              <Badge
-                                variant="outline"
-                                className={
-                                  rule.penalty_type === 'dsq'
-                                    ? 'bg-red-50 text-red-700 border-red-300'
-                                    : 'bg-gray-50 text-gray-700 border-gray-300'
-                                }
-                              >
-                                {rule.penalty_unit === 'seconds'
-                                  ? `+${rule.penalty_value}s`
-                                  : rule.penalty_unit === 'points'
-                                  ? `-${rule.penalty_value}pts`
-                                  : rule.penalty_type === 'dsq'
-                                  ? 'DSQ'
-                                  : `${rule.penalty_value}`}
-                              </Badge>
-                            </td>
-                            <td className="py-4 px-4 text-gray-600">{rule.condition?.max_count || '-'}</td>
-                            <td className="py-4 px-4">
-                              <Badge
-                                className={
-                                  rule.active
-                                    ? 'bg-green-100 text-green-700 border-green-300'
-                                    : 'bg-gray-100 text-gray-700 border-gray-300'
-                                }
-                              >
-                                {rule.active ? (
-                                  <>
-                                    <CheckCircle2 className="w-3 h-3 mr-1 inline" />
-                                    Active
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="w-3 h-3 mr-1 inline" />
-                                    Inactive
-                                  </>
-                                )}
-                              </Badge>
-                            </td>
-                            <td className="py-4 px-4">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => toggleRuleActive(rule.id, rule.active)}
-                                disabled={loading}
-                                className="gap-1"
-                              >
-                                {rule.active ? (
-                                  <>
-                                    <XCircle className="w-4 h-4" />
-                                    Deactivate
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Activate
-                                  </>
-                                )}
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Create Rule Tab */}
-        <TabsContent value="create" className="space-y-4">
-          <Card className="shadow-lg border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="w-5 h-5" />
-                Create New Penalty Rule
-              </CardTitle>
-              <CardDescription>
-                Define a new penalty rule for track events
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="space-y-6 max-w-2xl">
-                <div className="space-y-2">
-                  <Label htmlFor="rule-name">Rule Name *</Label>
-                  <Input
-                    id="rule-name"
-                    type="text"
-                    placeholder="e.g., Cone Penalty - Autocross"
-                    value={newRule.name}
-                    onChange={(e) => setNewRule((prev) => ({ ...prev, name: e.target.value }))}
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="event-type">Event Type *</Label>
-                    <Select
-                      value={newRule.event_type}
-                      onValueChange={(v) => setNewRule((prev) => ({ ...prev, event_type: v }))}
-                    >
-                      <SelectTrigger id="event-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DYNAMIC_EVENTS.map((ev) => (
-                          <SelectItem key={ev.value} value={ev.value}>
-                            <div className="flex items-center gap-2">
-                              <ev.icon className="w-4 h-4" />
-                              {ev.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="incident-type">Incident Type *</Label>
-                    <Select
-                      value={newRule.incident_type}
-                      onValueChange={(v) => setNewRule((prev) => ({ ...prev, incident_type: v }))}
-                    >
-                      <SelectTrigger id="incident-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {INCIDENT_TYPES.map((it) => (
-                          <SelectItem key={it.value} value={it.value}>
-                            {it.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="penalty-type">Penalty Type *</Label>
-                    <Select
-                      value={newRule.penalty_type}
-                      onValueChange={(v) => setNewRule((prev) => ({ ...prev, penalty_type: v }))}
-                    >
-                      <SelectTrigger id="penalty-type">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PENALTY_TYPES.map((pt) => {
-                          const Icon = pt.icon
-                          return (
-                            <SelectItem key={pt.key} value={pt.key}>
-                              <div className="flex items-center gap-2">
-                                <Icon className="w-4 h-4" />
-                                {pt.label}
-                              </div>
-                            </SelectItem>
-                          )
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="penalty-value">Penalty Value *</Label>
-                    <Input
-                      id="penalty-value"
-                      type="number"
-                      step="0.001"
-                      min="0"
-                      placeholder="0.000"
-                      value={newRule.penalty_value || ''}
-                      onChange={(e) => setNewRule((prev) => ({ ...prev, penalty_value: Number(e.target.value) }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="max-count">Max Count</Label>
-                    <Input
-                      id="max-count"
-                      type="number"
-                      min="1"
-                      placeholder="1"
-                      value={newRule.max_count || ''}
-                      onChange={(e) => setNewRule((prev) => ({ ...prev, max_count: Number(e.target.value) }))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="active">Status</Label>
-                    <div className="flex items-center gap-2 pt-2">
-                      <input
-                        id="active"
-                        type="checkbox"
-                        checked={newRule.active}
-                        onChange={(e) => setNewRule((prev) => ({ ...prev, active: e.target.checked }))}
-                        className="w-4 h-4 rounded border-gray-300"
-                      />
-                      <Label htmlFor="active" className="cursor-pointer">
-                        Active
-                      </Label>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (optional)</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Add a description for this penalty rule..."
-                    rows={4}
-                    value={newRule.description}
-                    onChange={(e) => setNewRule((prev) => ({ ...prev, description: e.target.value }))}
-                  />
-                </div>
-
-                <Button onClick={createPenaltyRule} disabled={loading} className="w-full gap-2">
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      Create Penalty Rule
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Review Tab */}
-        <TabsContent value="review" className="space-y-4">
+      <div className="space-y-4">
           {/* Filters */}
           <Card className="shadow-lg border-gray-200">
             <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-gray-200">
@@ -1027,10 +681,10 @@ export default function PenaltyManagementPage() {
           </Card>
 
           <Card className="shadow-lg border-gray-200">
-            <CardHeader className="bg-gradient-to-r from-red-50 to-rose-50 border-b border-gray-200">
+            <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-gray-200">
               <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5" />
-                Recent Incidents ({incidents.length})
+                Incident Log · {incidents.length} Records
               </CardTitle>
               <CardDescription>
                 Review and manage track incidents
@@ -1094,18 +748,30 @@ export default function PenaltyManagementPage() {
                               )}
                             </td>
                             <td className="py-4 px-4">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setSelectedIncident(incident)
-                                  setIncidentDialogOpen(true)
-                                }}
-                                className="gap-1"
-                              >
-                                <Eye className="w-4 h-4" />
-                                View
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSelectedIncident(incident)
+                                    setIncidentDialogOpen(true)
+                                  }}
+                                  className="gap-1"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                  View
+                                </Button>
+                                {userRole === 'admin' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    onClick={() => handleDeleteIncident(incident.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         )
@@ -1116,8 +782,7 @@ export default function PenaltyManagementPage() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+      </div>
 
       {/* Incident Details Dialog */}
       <Dialog open={incidentDialogOpen} onOpenChange={setIncidentDialogOpen}>
@@ -1200,6 +865,70 @@ export default function PenaltyManagementPage() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Custom Penalty Dialog */}
+      <Dialog open={createRuleDialogOpen} onOpenChange={setCreateRuleDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create Custom Penalty</DialogTitle>
+            <DialogDescription>Define a custom penalty to apply to a specific team.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Penalty Reason / Rule Name</Label>
+              <Input
+                placeholder="e.g. Unsportsmanlike Conduct"
+                value={newRule.name}
+                onChange={(e) => setNewRule({ ...newRule, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Penalty Type</Label>
+              <Select
+                value={newRule.penalty_type}
+                onValueChange={(val) => setNewRule({ ...newRule, penalty_type: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PENALTY_TYPES.map((t) => (
+                    <SelectItem key={t.key} value={t.key}>
+                      {t.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Value</Label>
+              <Input
+                type="number"
+                placeholder="e.g. 10"
+                value={newRule.penalty_value}
+                onChange={(e) => setNewRule({ ...newRule, penalty_value: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Description (Optional)</Label>
+              <Input
+                placeholder="Additional details..."
+                value={newRule.description}
+                onChange={(e) => setNewRule({ ...newRule, description: e.target.value })}
+              />
+            </div>
+            <Button
+              className="w-full mt-4"
+              onClick={async () => {
+                await createPenaltyRule()
+                setCreateRuleDialogOpen(false)
+              }}
+            >
+              Save Custom Penalty
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

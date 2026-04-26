@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Trophy, Calendar, CalendarCheck, CheckCircle2, Flag,
   Zap, FilePenLine, FileText, Building2, MessageSquare, User, LogOut,
   Users, Scale, Settings, ClipboardList, TrendingUp,
-  UserCircle, LogOut as LogoutIcon, Wrench, X
+  UserCircle, LogOut as LogoutIcon, Wrench, X, Shield
 } from "lucide-react"
 
 type NavItem = {
@@ -31,58 +31,51 @@ const navConfig: NavSection[] = [
   {
     label: '',
     items: [
-      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> }
-      // Temporarily removed: Results
-      // { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" />, roles: ['admin'] }
+      { label: 'Dashboard', href: '/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+      { label: 'Results', href: '/results', icon: <Trophy className="w-5 h-5" />, roles: ['admin', 'viewer', 'team_leader', 'team_member', 'inspection_responsible', 'scrutineer', 'track_marshal'] }
     ]
   },
-  // Temporarily removed: SCRUTINEERING (Calendar, Book Inspection, Live Inspections)
-  // {
-  //   label: 'SCRUTINEERING',
-  //   labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'],
-  //   hideForRoles: ['team_leader'],
-  //   items: [
-  //     { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member'] },
-  //     { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_member'] },
-  //     { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible'] }
-  //   ]
-  // },
-  // Temporarily removed: TRACK EVENTS (Track Marshal, Live Track Data)
-  // {
-  //   label: 'TRACK EVENTS',
-  //   labelRoles: ['admin', 'track_marshal', 'viewer'],
-  //   hideForRoles: ['team_leader'],
-  //   items: [
-  //     { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
-  //     { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin'] }
-  //   ]
-  // },
-  // Temporarily removed: JUDGED EVENTS (Design Event, Business Plan, Cost & Manufacturing)
-  // {
-  //   label: 'JUDGED EVENTS',
-  //   labelRoles: ['admin'],
-  //   hideForRoles: ['team_leader'],
-  //   items: [
-  //     { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin'] },
-  //     { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin'] },
-  //     { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />, roles: ['admin'] }
-  //   ]
-  // },
-  // Temporarily removed: TEAM FEATURES (Feedback Booking)
-  // {
-  //   label: 'TEAM FEATURES',
-  //   labelRoles: ['admin', 'team_member', 'inspection_responsible'],
-  //   hideForRoles: ['team_leader'],
-  //   items: [
-  //     { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'team_member', 'inspection_responsible'] }
-  //   ]
-  // },
+  {
+    label: 'SCRUTINEERING',
+    labelRoles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member', 'team_leader'],
+    items: [
+      { label: 'Calendar', href: '/scrutineering/calendar', icon: <Calendar className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_member', 'team_leader'] },
+      { label: 'Book Inspection', href: '/scrutineering/book', icon: <CalendarCheck className="w-5 h-5" />, roles: ['admin', 'inspection_responsible', 'team_leader'] },
+      { label: 'Live Inspections', href: '/scrutineering/live', icon: <ClipboardList className="w-5 h-5" />, roles: ['admin', 'scrutineer', 'inspection_responsible', 'team_leader'] }
+    ]
+  },
+  {
+    label: 'TRACK EVENTS',
+    labelRoles: ['admin', 'track_marshal', 'viewer', 'team_leader'],
+    items: [
+      { label: 'Track Marshal', href: '/track/marshal', icon: <Flag className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
+      { label: 'Safety Dashboard', href: '/track/safety', icon: <Shield className="w-5 h-5" />, roles: ['admin', 'track_marshal'] },
+      { label: 'Live Track Data', href: '/track', icon: <TrendingUp className="w-5 h-5" />, roles: ['admin', 'viewer', 'track_marshal'] }
+    ]
+  },
+  {
+    label: 'JUDGED EVENTS',
+    labelRoles: ['admin', 'design_judge_overall', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics', 'bp_judge', 'cm_judge', 'team_leader'],
+    items: [
+      { label: 'Design Event', href: '/judged-events/engineering-design', icon: <FilePenLine className="w-5 h-5" />, roles: ['admin', 'design_judge_overall', 'design_judge_software', 'design_judge_mechanical', 'design_judge_electronics'] },
+      { label: 'Business Plan', href: '/judged-events/business-plan', icon: <FileText className="w-5 h-5" />, roles: ['admin', 'bp_judge'] },
+      { label: 'Cost & Manufacturing', href: '/judged-events/cost-manufacturing', icon: <Building2 className="w-5 h-5" />, roles: ['admin', 'cm_judge'] }
+    ]
+  },
+  {
+    label: 'TEAM FEATURES',
+    labelRoles: ['admin', 'team_member', 'inspection_responsible', 'team_leader'],
+    items: [
+      { label: 'Feedback Booking', href: '/feedback', icon: <MessageSquare className="w-5 h-5" />, roles: ['admin', 'inspection_responsible'] }
+    ]
+  },
   {
     label: 'ADMINISTRATION',
     labelRoles: ['admin', 'scrutineer', 'team_leader'],
     items: [
       { label: 'User Management', href: '/admin/users', icon: <Users className="w-5 h-5" />, roles: ['admin', 'team_leader'] },
-      // { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] }
+      { label: 'Penalty Management', href: '/admin/penalties', icon: <Scale className="w-5 h-5" />, roles: ['admin', 'scrutineer'] },
+      { label: 'Integrations', href: '/admin/settings', icon: <Settings className="w-5 h-5" />, roles: ['admin'] }
     ]
   },
   {
@@ -103,14 +96,26 @@ type SidebarProps = {
 export default function Sidebar({ sidebarOpen, setSidebarOpen }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, profile: authProfile } = useAuth()
+  const { user, profile: authProfile, loading: authLoading } = useAuth()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoError, setLogoError] = useState(false)
 
   const role = authProfile?.app_role || null
   const profile = authProfile ? { first_name: authProfile.first_name, last_name: authProfile.last_name } : null
 
-  // LayoutWrapper ensures we only render when authenticated, so no need to check here
+  // Handle loading state to prevent layout shift or 'reduced' sidebar
+  if (authLoading && !role) {
+    return (
+      <aside className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col p-4">
+        <div className="h-12 w-full bg-gray-100 animate-pulse rounded-lg mb-8" />
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-10 w-full bg-gray-50 animate-pulse rounded-lg" />
+          ))}
+        </div>
+      </aside>
+    )
+  }
 
   const handleLogout = async () => {
     if (isLoggingOut) return

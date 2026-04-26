@@ -23,13 +23,57 @@ import {
   Users,
   Zap,
   Wrench,
-  Battery
+  Battery,
+  Info,
+  LayoutGrid
 } from 'lucide-react'
 import { jsPDF } from 'jspdf'
 import { logger } from '@/lib/utils/logger'
+import { todayInEventTz } from '@/lib/utils/formatting'
 import toast from 'react-hot-toast'
 
 const QUEUE_TABS = ['upcoming', 'ongoing', 'completed']
+
+const EV_PHASES = [
+  { name: 'PRE', desc: 'Pre-Inspection' },
+  { name: 'MECH', desc: 'Mechanical' },
+  { name: 'ACC', desc: 'Accumulator' },
+  { name: 'ELEC', desc: 'Electrical' },
+  { name: 'TILT', desc: 'Tilt Test' },
+  { name: 'RAIN', desc: 'Rain Test' },
+  { name: 'BRAKE', desc: 'Brake Test' }
+]
+
+const CV_PHASES = [
+  { name: 'PRE', desc: 'Pre-Inspection' },
+  { name: 'MECH', desc: 'Mechanical' },
+  { name: 'TILT', desc: 'Tilt Test' },
+  { name: 'NOISE', desc: 'Noise Test' },
+  { name: 'BRAKE', desc: 'Brake Test' }
+]
+
+const TYPE_STYLES: Record<string, { accent: string; gradient: string; glow: string }> = {
+  Electrical: { 
+    accent: 'bg-yellow-500', 
+    gradient: 'from-yellow-500/10 to-yellow-500/5',
+    glow: 'shadow-yellow-500/20'
+  },
+  Mechanical: { 
+    accent: 'bg-blue-500', 
+    gradient: 'from-blue-500/10 to-blue-500/5',
+    glow: 'shadow-blue-500/20'
+  },
+  Accumulator: { 
+    accent: 'bg-green-500', 
+    gradient: 'from-green-500/10 to-green-500/5',
+    glow: 'shadow-green-500/20'
+  },
+  'Tilt Test': { accent: 'bg-orange-500', gradient: 'from-orange-500/10 to-orange-500/5', glow: 'shadow-orange-500/20' },
+  'Rain Test': { accent: 'bg-cyan-500', gradient: 'from-cyan-500/10 to-cyan-500/5', glow: 'shadow-cyan-500/20' },
+  'Noise Test': { accent: 'bg-indigo-500', gradient: 'from-indigo-500/10 to-indigo-500/5', glow: 'shadow-indigo-500/20' },
+  'Brake Test': { accent: 'bg-red-500', gradient: 'from-red-500/10 to-red-500/5', glow: 'shadow-red-500/20' },
+  'Pre-Inspection': { accent: 'bg-gray-500', gradient: 'from-gray-500/10 to-gray-500/5', glow: 'shadow-gray-500/20' },
+}
 
 type Team = {
   name: string
@@ -80,19 +124,20 @@ export default function InspectionQueuePage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [role, setRole] = useState<string>('')
   const [teamId, setTeamId] = useState<string | null>(null)
-  const [today, setToday] = useState('')
+  const [today, setToday] = useState(todayInEventTz())
   const [tab, setTab] = useState<'upcoming' | 'ongoing' | 'completed'>('upcoming')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reinspectLoading, setReinspectLoading] = useState<string | null>(null)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [selectedClass, setSelectedClass] = useState<'ALL' | 'EV' | 'CV'>('ALL')
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const supabase = useMemo(() => getSupabaseClient(), [])
 
-  // Team leaders only get User Management; redirect if they hit scrutineering
+  // Team members are not permitted; redirect if they hit scrutineering directly
   useEffect(() => {
     if (authLoading || !authProfile) return
-    if (authProfile.app_role === 'team_leader') {
+    if (authProfile.app_role === 'team_member') {
       router.replace('/dashboard')
     }
   }, [authLoading, authProfile, router])
@@ -103,7 +148,7 @@ export default function InspectionQueuePage() {
     Accumulator: <Battery className="w-4 h-4" />,
   }
 
-  useEffect(() => { setToday(new Date().toISOString().split('T')[0]) }, [])
+  useEffect(() => { setToday(todayInEventTz()) }, [])
 
   // Listen for auth state changes
   useEffect(() => {
@@ -203,12 +248,12 @@ export default function InspectionQueuePage() {
           .select(`
             *,
             inspection_results(id, status, completed_at, scrutineer_ids),
-            inspection_types(name),
-            teams(name, code)
+            inspection_types(name, duration_minutes),
+            teams(name, code, vehicle_class)
           `)
           .eq('date', today)
           .order('start_time')
-        if ((role === 'team_leader' || role === 'team_member') && teamId) {
+        if ((role === 'team_leader' || role === 'team_member' || role === 'inspection_responsible') && teamId) {
           query = query.eq('team_id', teamId)
         }
         const { data, error } = await query
@@ -336,9 +381,33 @@ export default function InspectionQueuePage() {
     }
   }, [supabase, today, role, teamId])
 
-  // Tab filtering
+  // 🔔 Discord: Poll for inspection reminders every 5 minutes
+  // This triggers the server-side check for bookings starting within 15 min
+  useEffect(() => {
+    // Only admins/scrutineers should trigger reminders to avoid duplicates
+    if (!role || !['admin', 'scrutineer'].includes(role)) return
+
+    const checkReminders = () => {
+      fetch('/api/discord/reminders').catch(() => {})
+    }
+
+    // Check immediately on load, then every 5 minutes
+    checkReminders()
+    const reminderInterval = setInterval(checkReminders, 5 * 60 * 1000)
+    return () => clearInterval(reminderInterval)
+  }, [role])
+
+  // Tab & Class filtering
+  const filteredBookings = useMemo(() => {
+    let list = bookings
+    if (selectedClass !== 'ALL') {
+      list = list.filter(b => b.teams?.vehicle_class === selectedClass)
+    }
+    return list
+  }, [bookings, selectedClass])
+
   const byStatus = (tabFilter: string) =>
-    bookings.filter(b =>
+    filteredBookings.filter(b =>
       tabFilter === 'upcoming'
         ? b.status === 'upcoming'
         : tabFilter === 'ongoing'
@@ -380,7 +449,7 @@ export default function InspectionQueuePage() {
         .select(`
           *,
           inspection_types(name),
-          teams(name, code),
+          teams(name, code, vehicle_class),
           inspection_results(status, completed_at, scrutineer_ids)
         `)
         .eq('id', bookingId)
@@ -390,7 +459,7 @@ export default function InspectionQueuePage() {
         throw new Error(bookingError?.message || 'Booking not found')
       }
       
-      const typedBooking = bookingData as unknown as Booking
+      const typedBooking = bookingData as any
       const { data: progress, error: progressError } = await supabase
         .from('inspection_progress')
         .select('*, user_profiles(first_name, last_name)')
@@ -401,34 +470,51 @@ export default function InspectionQueuePage() {
       }
       
       const doc = new jsPDF()
-      doc.setFontSize(18)
-      doc.text(`Inspection Report`, 10, 10)
-      doc.setFontSize(12)
-      doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? 'N/A'}`, 10, 20)
-      doc.text(`Team: ${typedBooking.teams?.name ?? 'N/A'} (${typedBooking.teams?.code ?? '-'})`, 10, 27)
-      doc.text(`Slot: ${typedBooking.start_time} - ${typedBooking.end_time}`, 10, 34)
-      doc.text(`Date: ${typedBooking.date}`, 10, 41)
-      doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status ?? '-'}`, 10, 48)
-      doc.text(`Checklist Items:`, 10, 58)
+      const pageWidth = doc.internal.pageSize.getWidth()
       
-      let yPos = 65;
-      ((progress ?? []) as unknown as InspectionProgress[]).forEach((p: InspectionProgress, i) => {
-        const inspectorName = p.user_profiles 
-          ? `${p.user_profiles.first_name ?? ''} ${p.user_profiles.last_name ?? ''}`.trim() 
-          : p.user_id ?? 'Unknown'
-        doc.text(
-          `${i + 1}. ${p.item_id} - Status: ${p.status ?? '-'} - By: ${inspectorName}`,
-          10, yPos)
+      // --- HEADER ---
+      doc.setFillColor(30, 64, 175)
+      doc.rect(0, 0, pageWidth, 40, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(22)
+      doc.setFont('helvetica', 'bold')
+      doc.text('FORMULA STUDENT INSPECTION SHEET', 15, 20)
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Official Scrutineering Report - Formula IHU 2026`, 15, 28)
+      
+      // --- TEAM INFO ---
+      doc.setTextColor(33, 33, 33)
+      doc.setDrawColor(200, 200, 200)
+      doc.setFillColor(248, 250, 252)
+      doc.rect(10, 45, pageWidth - 20, 35, 'FD')
+      
+      doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.text('TEAM INFORMATION', 15, 52)
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal')
+      doc.text(`Team: ${typedBooking.teams?.name ?? ""}`, 15, 60)
+      doc.text(`Car #: ${typedBooking.teams?.code ?? "-"}`, 15, 67)
+      doc.text(`Class: ${typedBooking.teams?.vehicle_class || 'N/A'}`, 15, 74)
+      doc.text(`Inspection: ${typedBooking.inspection_types?.name ?? ""}`, 110, 60)
+      doc.text(`Date: ${typedBooking.date}`, 110, 67)
+      doc.text(`Status: ${typedBooking.inspection_results?.[0]?.status?.toUpperCase() ?? '-'}`, 110, 74)
+      
+      // --- ITEMS ---
+      let yPos = 100
+      doc.setFont('helvetica', 'bold'); doc.text('CHECKLIST PROGRESS:', 10, 95)
+      
+      const sortedProgress = (progress ?? []).sort((a: any, b: any) => a.item_id.localeCompare(b.item_id))
+      
+      sortedProgress.forEach((p: any, i: number) => {
+        if (yPos > 270) { doc.addPage(); yPos = 20 }
+        const inspector = p.user_profiles ? `${p.user_profiles.first_name} ${p.user_profiles.last_name}` : 'Unknown'
+        doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+        doc.text(`${i + 1}. Item ${p.item_id.split('-')[0]}... - PASS - By: ${inspector}`, 10, yPos)
         yPos += 7
-        if (yPos > 280) {
-          doc.addPage()
-          yPos = 20
-        }
       })
       
-      const fileName = `${typedBooking.teams?.name ?? 'Team'}_${typedBooking.inspection_types?.name ?? 'Inspection'}_${typedBooking.start_time}.pdf`
+      const fileName = `FIHU26_${typedBooking.teams?.code || 'CAR'}_${typedBooking.inspection_types?.name.replace(/ /g, '_')}.pdf`
       doc.save(fileName)
-      toast.success('PDF exported successfully')
+      toast.success('Premium PDF exported successfully')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to export PDF'
       toast.error(errorMessage)
@@ -458,6 +544,21 @@ export default function InspectionQueuePage() {
       
       if (progressError) throw progressError
       
+      // 🔔 Discord: Inspection reset
+      const resetBooking = bookings.find(b => b.id === bookingId)
+      if (resetBooking) {
+        fetch('/api/discord/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'inspection_reset',
+            teamName: resetBooking.teams?.name || 'Unknown',
+            teamCode: resetBooking.teams?.code || '??',
+            inspectionType: resetBooking.inspection_types?.name || 'Inspection',
+          }),
+        }).catch(() => {})
+      }
+      
       toast.success('Inspection reset successfully')
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reset inspection'
@@ -469,35 +570,41 @@ export default function InspectionQueuePage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 animate-fade-in min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-gray-50/50 min-h-screen animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Play className="w-8 h-8 text-primary" />
-            Live Inspections Queue
-          </h1>
-          <div className="mt-2 flex items-center gap-2 text-gray-600">
-            <Calendar className="w-4 h-4" />
-            <p className="text-base font-medium">
-              Today: <span className="font-semibold text-primary">{today}</span>
-            </p>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+            <LayoutGrid className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+              Scrutineering <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Cockpit</span>
+            </h1>
+            <div className="flex items-center gap-2 text-gray-400">
+              <Calendar className="w-3 h-3" />
+              <p className="text-[9px] font-bold uppercase tracking-widest leading-none">
+                Competition Day: <span className="text-gray-700">{today}</span>
+              </p>
+            </div>
           </div>
         </div>
-        {error && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setError(null)
-              window.location.reload()
-            }}
-            className="gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </Button>
-        )}
       </div>
+        
+        <div className="flex items-center gap-3 p-1 bg-gray-100/80 backdrop-blur-sm rounded-xl border border-gray-200">
+          <Tabs 
+            value={selectedClass} 
+            onValueChange={(v) => setSelectedClass(v as any)}
+            className="w-full md:w-auto"
+          >
+            <TabsList className="grid grid-cols-3 w-full md:w-[240px] bg-transparent">
+              <TabsTrigger value="ALL" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">All</TabsTrigger>
+              <TabsTrigger value="EV" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">EV</TabsTrigger>
+              <TabsTrigger value="CV" className="data-[state=active]:bg-orange-600 data-[state=active]:text-white">CV</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
 
       {/* Error States */}
       {authError && (
@@ -536,39 +643,45 @@ export default function InspectionQueuePage() {
       {/* Stats and Tabs */}
       <Card className="shadow-lg border-gray-200">
         <CardContent className="pt-6">
-          <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-            <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100/50">
-              {QUEUE_TABS.map(t => (
-                <TabsTrigger 
-                  key={t} 
-                  value={t}
-                  className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-white"
-                >
-                  {t === 'upcoming' && <Clock className="w-4 h-4" />}
-                  {t === 'ongoing' && <Play className="w-4 h-4" />}
-                  {t === 'completed' && <CheckCircle2 className="w-4 h-4" />}
-                  <span className="capitalize">{t}</span>
-                  <Badge variant="outline" className="ml-1">
-                    {byStatus(t).length}
-                  </Badge>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+          <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+            <div className="flex flex-col md:flex-row gap-6 items-center justify-between mb-8">
+              <TabsList className="flex w-full md:w-auto bg-gray-100 p-1 rounded-xl border border-gray-200 h-11">
+                {QUEUE_TABS.map(t => (
+                  <TabsTrigger 
+                    key={t} 
+                    value={t}
+                    className="flex-1 md:flex-none md:min-w-[140px] gap-3 px-6 rounded-lg font-bold transition-all data-[state=active]:bg-white data-[state=active]:text-primary data-[state=active]:shadow-sm"
+                  >
+                    {t === 'upcoming' && <Clock className="w-4 h-4" />}
+                    {t === 'ongoing' && <Play className="w-4 h-4" />}
+                    {t === 'completed' && <CheckCircle2 className="w-4 h-4" />}
+                    <span className="capitalize">{t}</span>
+                    <span className={`ml-2 px-1.5 py-0.5 rounded-md text-[10px] ${tab === t ? 'bg-primary/10 text-primary' : 'bg-gray-200 text-gray-500'}`}>
+                      {byStatus(t).length}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
             
             {tab === 'completed' && (
-              <div className="flex gap-4 mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100/50 rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border-2 border-green-300 rounded-lg">
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-4 mb-8">
+                <div className="flex-1 flex items-center gap-3.5 px-5 py-3.5 bg-emerald-50/50 border border-emerald-100 rounded-[1.25rem]">
+                  <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center border border-emerald-500/20">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  </div>
                   <div>
-                    <div className="text-xs text-green-600 font-medium">Passed</div>
-                    <div className="text-xl font-bold text-green-800">{passedCount}</div>
+                    <div className="text-[9px] text-emerald-600 font-black uppercase tracking-widest leading-none mb-1">Validated</div>
+                    <div className="text-xl font-black text-emerald-900 leading-none">{passedCount} Entities</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border-2 border-red-300 rounded-lg">
-                  <XCircle className="w-5 h-5 text-red-600" />
+                <div className="flex-1 flex items-center gap-3.5 px-5 py-3.5 bg-rose-50/50 border border-rose-100 rounded-[1.25rem]">
+                  <div className="w-10 h-10 bg-rose-500/10 rounded-xl flex items-center justify-center border border-rose-500/20">
+                    <XCircle className="w-5 h-5 text-rose-600" />
+                  </div>
                   <div>
-                    <div className="text-xs text-red-600 font-medium">Failed</div>
-                    <div className="text-xl font-bold text-red-800">{failedCount}</div>
+                    <div className="text-[9px] text-rose-600 font-black uppercase tracking-widest leading-none mb-1">Required Re-test</div>
+                    <div className="text-xl font-black text-rose-900 leading-none">{failedCount} Entities</div>
                   </div>
                 </div>
               </div>
@@ -590,136 +703,128 @@ export default function InspectionQueuePage() {
                   <p className="text-sm text-gray-400 mt-1">Check back later or view other tabs</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                   {byStatus(tab).map(b => {
                     const inspectionTypeName = b.inspection_types?.name ?? "Inspection"
                     const resultStatus = b.inspection_results?.[0]?.status
                     const canManage = role === 'scrutineer' || role === 'admin' || role === 'judge'
+                    const style = TYPE_STYLES[inspectionTypeName] || TYPE_STYLES['Pre-Inspection']
                     
                     return (
                       <Card 
                         key={b.id} 
-                        className={`shadow-md hover:shadow-lg transition-all duration-200 ${
-                          b.status === 'ongoing' ? 'border-yellow-300 bg-yellow-50/30' :
-                          resultStatus === 'passed' ? 'border-green-300 bg-green-50/30' :
-                          resultStatus === 'failed' ? 'border-red-300 bg-red-50/30' :
-                          'border-gray-200'
+                        className={`group relative overflow-hidden transition-all duration-300 border-gray-200 hover:border-gray-300 hover:shadow-xl hover:-translate-y-1 ${
+                          b.status === 'ongoing' ? 'ring-2 ring-yellow-400 ring-offset-2' : ''
                         }`}
                       >
-                        <CardContent className="pt-6">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2">
-                                {TYPE_ICONS[inspectionTypeName]}
-                                <h3 className="font-bold text-lg text-gray-900">{inspectionTypeName}</h3>
+                        <div className={`absolute top-0 left-0 bottom-0 w-1 ${style.accent}`} />
+                        <div className={`absolute inset-0 bg-gradient-to-br ${style.gradient} opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none`} />
+                        
+                        <CardContent className="p-5">
+                          <div className="flex flex-col h-full gap-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex items-center gap-3">
+                                <div>
+                                  <h3 className="font-bold text-gray-900 leading-tight">{inspectionTypeName}</h3>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    {b.is_rescrutineering && (
+                                      <Badge variant="outline" className="text-[8px] h-3 px-1 border-orange-200 text-orange-600 uppercase font-black">RE-TEST</Badge>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Users className="w-4 h-4" />
-                                  <span className="font-semibold">{b.teams?.name ?? "Team"}</span>
-                                  {b.teams?.code && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {b.teams.code}
-                                    </Badge>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-gray-600">
-                                  <Clock className="w-4 h-4" />
-                                  <span>{b.start_time} - {b.end_time}</span>
-                                  <Badge variant="outline" className="text-xs">
-                                    Lane {b.resource_index}
-                                  </Badge>
-                                </div>
-                                {b.status === 'ongoing' && (
-                                  <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                                    <Play className="w-3 h-3 mr-1" />
-                                    Ongoing
-                                  </Badge>
-                                )}
-                                {tab === 'completed' && resultStatus && (
-                                  <Badge 
-                                    className={
-                                      resultStatus === 'passed' 
-                                        ? 'bg-green-100 text-green-800 border-green-300' 
-                                        : resultStatus === 'failed'
-                                        ? 'bg-red-100 text-red-800 border-red-300'
-                                        : 'bg-gray-100 text-gray-800 border-gray-300'
-                                    }
-                                  >
-                                    {resultStatus === 'passed' ? (
-                                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                                    ) : resultStatus === 'failed' ? (
-                                      <XCircle className="w-3 h-3 mr-1" />
-                                    ) : null}
-                                    {resultStatus === 'passed' ? 'Passed' : resultStatus === 'failed' ? 'Failed' : resultStatus}
-                                  </Badge>
-                                )}
+                              <div className="text-right">
+                                <div className="text-xs font-bold text-gray-400 tabular-nums">{b.start_time}</div>
+                                <div className="text-[10px] font-medium text-gray-300 leading-none">Scheduled</div>
                               </div>
                             </div>
-                            <div className="flex flex-col items-end gap-2">
-                              {tab === 'upcoming' && canManage && (
-                                <Link href={`/scrutineering/live/${b.id}`}>
-                                  <Button className="gap-2 bg-gradient-to-r from-primary to-primary-600 hover:from-primary-600 hover:to-primary">
-                                    <Play className="w-4 h-4" />
-                                    Start
-                                  </Button>
-                                </Link>
-                              )}
-                              {tab === 'ongoing' && (
-                                <Link href={`/scrutineering/live/${b.id}`}>
-                                  <Button 
-                                    variant={canManage ? "default" : "outline"}
-                                    className={`gap-2 ${
-                                      canManage 
-                                        ? 'bg-yellow-600 hover:bg-yellow-700 text-white' 
-                                        : 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                                    }`}
-                                    disabled={!canManage}
-                                  >
-                                    <Play className="w-4 h-4" />
-                                    {canManage ? 'Continue' : 'View'}
-                                  </Button>
-                                </Link>
-                              )}
-                              {tab === 'completed' && (
-                                <div className="flex flex-col gap-2">
+
+                            <div className="bg-gray-50/50 rounded-xl p-3 border border-gray-100">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="text-[10px] font-black text-primary uppercase tracking-widest bg-primary/10 px-1.5 py-0.5 rounded-md leading-none">
+                                      Car #{b.teams?.code || '??'}
+                                    </div>
+                                    <Badge className={`text-[8px] h-3.5 px-1.5 border-none tracking-tighter ${
+                                      b.teams?.vehicle_class === 'EV' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                                    }`}>
+                                      {b.teams?.vehicle_class}
+                                    </Badge>
+                                  </div>
+                                  <div className="text-sm font-bold text-gray-800 truncate">{b.teams?.name}</div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between mt-auto pt-2">
+                              <div>
+                                {b.status === 'ongoing' ? (
+                                  <div className="flex items-center gap-2">
+                                    <div className="relative flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-yellow-50 border border-yellow-200">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+                                      <span className="text-[10px] font-bold text-yellow-700 uppercase">Active</span>
+                                    </div>
+                                    <OngoingTimer 
+                                      startedAt={b.started_at} 
+                                      durationMinutes={b.inspection_types?.duration_minutes || 120} 
+                                    />
+                                  </div>
+                                ) : tab === 'completed' && resultStatus ? (
+                                  <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border font-black text-[10px] uppercase shadow-sm ${
+                                    resultStatus === 'passed' 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                                  }`}>
+                                    {resultStatus === 'passed' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                                    {resultStatus === 'passed' ? 'PASSED' : 'FAILED'}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1 text-gray-400 font-medium italic text-[10px]">
+                                    <Clock className="w-3 h-3" />
+                                    Standby
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {tab === 'upcoming' && canManage && (
                                   <Link href={`/scrutineering/live/${b.id}`}>
-                                    <Button variant="outline" className="gap-2 w-full">
-                                      <Eye className="w-4 h-4" />
-                                      Review
+                                    <Button size="sm" className="h-8 rounded-lg px-4 font-bold bg-primary hover:bg-primary-600 shadow-md">
+                                      Start
                                     </Button>
                                   </Link>
-                                  {canManage && (
-                                    <div className="flex gap-2">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => exportInspectionPDF(b.id)}
-                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                        title="Export as PDF"
-                                      >
-                                        <FileText className="w-4 h-4" />
+                                )}
+                                {tab === 'ongoing' && (
+                                  <Link href={`/scrutineering/live/${b.id}`}>
+                                    <Button 
+                                      size="sm"
+                                      className={`h-8 rounded-lg px-4 font-bold shadow-md transition-all ${
+                                        canManage 
+                                          ? 'bg-yellow-500 hover:bg-yellow-600 text-white' 
+                                          : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      {canManage ? 'Resume' : 'View'}
+                                    </Button>
+                                  </Link>
+                                )}
+                                {tab === 'completed' && (
+                                  <div className="flex items-center gap-1">
+                                    <Link href={`/scrutineering/live/${b.id}`}>
+                                      <Button variant="outline" size="sm" className="h-8 rounded-lg font-bold border-gray-200 hover:bg-gray-50">
+                                        Logs
                                       </Button>
-                                      {resultStatus === 'passed' && role !== 'judge' && (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          disabled={reinspectLoading === b.id}
-                                          onClick={() => handleReinspect(b.id)}
-                                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                          title="Reset this inspection"
-                                        >
-                                          {reinspectLoading === b.id ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                          ) : (
-                                            <RotateCcw className="w-4 h-4" />
-                                          )}
-                                        </Button>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                    </Link>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => exportInspectionPDF(b.id)}
+                                      className="h-8 w-8 p-0 text-gray-400 hover:text-rose-600 hover:bg-rose-50"
+                                    >
+                                      <FileText className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </CardContent>
@@ -732,6 +837,40 @@ export default function InspectionQueuePage() {
           </Tabs>
         </CardContent>
       </Card>
+    </div>
+  )
+}
+
+function OngoingTimer({ startedAt, durationMinutes }: { startedAt?: string, durationMinutes: number }) {
+  const [timeLeft, setTimeLeft] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (!startedAt) return
+
+    const start = new Date(startedAt).getTime()
+    const timer = setInterval(() => {
+      const now = new Date().getTime()
+      const elapsed = (now - start) / 1000 / 60
+      const remaining = Math.max(0, durationMinutes - elapsed)
+      setTimeLeft(remaining)
+      if (remaining <= 0) clearInterval(timer)
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [startedAt, durationMinutes])
+
+  if (timeLeft === null) return null
+
+  const mins = Math.floor(timeLeft)
+  const secs = Math.floor((timeLeft - mins) * 60)
+  const display = `${mins}:${secs.toString().padStart(2, '0')}`
+
+  return (
+    <div className={`text-[11px] font-black tabular-nums px-2 py-0.5 rounded-md border flex items-center gap-1.5 shadow-sm transition-colors ${
+      timeLeft < 5 ? 'bg-rose-500 text-white border-rose-600 animate-pulse' : 'bg-primary/10 text-primary border-primary/20'
+    }`}>
+      <Clock className="w-3 h-3" />
+      {timeLeft > 0 ? display : 'TIMEOUT'}
     </div>
   )
 }

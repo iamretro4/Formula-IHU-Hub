@@ -5,7 +5,7 @@ import getSupabaseClient from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { 
   Loader2, 
@@ -22,7 +22,8 @@ import {
   XCircle,
   Zap,
   Shield,
-  Activity
+  Activity,
+  History
 } from 'lucide-react'
 import { Database } from '@/lib/types/database'
 import { logger } from '@/lib/utils/logger'
@@ -80,7 +81,7 @@ export default function MarshalAndLiveTrackPage() {
   const [event, setEvent] = useState<string | null>(null)
   const [locked, setLocked] = useState(false)
   const [teamId, setTeamId] = useState<string | null>(null)
-  const [runNumber, setRunNumber] = useState<number | null>(null)
+  const [runNumber, setRunNumber] = useState<number | null>(1)
   const [cones, setCones] = useState<number>(0)
   const [offCourse, setOffCourse] = useState<number>(0)
   const [dsq, setDsq] = useState<boolean>(false)
@@ -184,14 +185,28 @@ export default function MarshalAndLiveTrackPage() {
     return () => { active = false }
   }, [supabase, loadIncidents, loadEntries])
 
+  // Auto-lock when both sector and event are selected
+  useEffect(() => {
+    if (sector && event && !locked) {
+      setLocked(true)
+      toast.success('Setup locked. Ready to log incidents.')
+    }
+  }, [sector, event, locked])
+
   function resetPenalties() {
     setCones(0)
     setOffCourse(0)
     setDsq(false)
   }
 
-  async function logIncidentWithPenalties(type: string) {
-    if (!user || !locked || !sector || !event || !teamId || runNumber === null) {
+  async function logIncidentWithPenalties(type: string, targetTeamId?: string, targetRunNumber?: number, c?: number, o?: number, d?: boolean) {
+    const tid = targetTeamId || teamId
+    const rid = targetRunNumber || runNumber
+    const conesVal = c !== undefined ? c : cones
+    const offVal = o !== undefined ? o : offCourse
+    const dsqVal = d !== undefined ? d : dsq
+
+    if (!user || !locked || !sector || !event || !tid || rid === null) {
       toast.error('Please select team and run number')
       return
     }
@@ -202,34 +217,34 @@ export default function MarshalAndLiveTrackPage() {
       
       // Build penalties object
       const penalties: any = {}
-      if (cones > 0) penalties.cones = cones
-      if (offCourse > 0) penalties.off_course = offCourse
-      if (dsq) penalties.dsq = true
+      if (conesVal > 0) penalties.cones = conesVal
+      if (offVal > 0) penalties.off_course = offVal
+      if (dsqVal) penalties.dsq = true
       
       // Log the incident
       const { error: incidentError } = await (supabase.from('track_incidents') as any).insert({
-        team_id: teamId,
+        team_id: tid,
         marshal_id: user.id,
         incident_type: type,
         sector,
         occurred_at: now,
-        severity: 'minor',
-        description: '',
+        severity: type === 'Safety' ? 'critical' : 'minor',
+        description: type === 'Safety' ? 'Safety concern reported' : '',
         action_taken: '',
-        run_number: runNumber,
+        run_number: rid,
       })
       
       if (incidentError) throw incidentError
       
       // Log/update penalties in dynamic_event_runs
-      if (cones > 0 || offCourse > 0 || dsq) {
+      if (conesVal > 0 || offVal > 0 || dsqVal) {
         // Check if run exists
         const { data: existingRun } = await supabase
           .from('dynamic_event_runs')
           .select('id, penalties')
-          .eq('team_id', teamId)
+          .eq('team_id', tid)
           .eq('event_type', event as 'acceleration' | 'skidpad' | 'autocross' | 'endurance')
-          .eq('run_number', runNumber)
+          .eq('run_number', rid)
           .single()
         
         if (existingRun) {
@@ -237,9 +252,9 @@ export default function MarshalAndLiveTrackPage() {
           const existingPenalties = (existingRun.penalties || {}) as Record<string, any>
           const updatedPenalties = {
             ...existingPenalties,
-            cones: (existingPenalties.cones || 0) + (penalties.cones || 0),
-            off_course: (existingPenalties.off_course || 0) + (penalties.off_course || 0),
-            dsq: existingPenalties.dsq || penalties.dsq || false
+            cones: (existingPenalties.cones || 0) + (conesVal || 0),
+            off_course: (existingPenalties.off_course || 0) + (offVal || 0),
+            dsq: existingPenalties.dsq || dsqVal || false
           }
           
           const { error: updateError } = await supabase
@@ -256,11 +271,15 @@ export default function MarshalAndLiveTrackPage() {
           const { error: insertError } = await supabase
             .from('dynamic_event_runs')
             .insert({
-              team_id: teamId,
+              team_id: tid,
               event_type: event as 'acceleration' | 'skidpad' | 'autocross' | 'endurance',
-              run_number: runNumber,
-              penalties,
-              status: dsq ? 'dsq' : 'completed',
+              run_number: rid,
+              penalties: {
+                cones: conesVal,
+                off_course: offVal,
+                dsq: dsqVal
+              },
+              status: dsqVal ? 'dsq' : 'completed',
               recorded_by: user.id,
             })
           
@@ -268,9 +287,32 @@ export default function MarshalAndLiveTrackPage() {
         }
       }
       
-      toast.success(`${type} incident and penalties logged successfully`)
+      // Notify Discord
+      try {
+        await fetch('/api/discord/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: type === 'Safety' ? 'safety' : 'penalty',
+            title: type === 'Safety' ? '🚨 SAFETY INCIDENT' : '⚠️ TRACK PENALTY',
+            color: type === 'Safety' ? 16711680 : 16753920,
+            fields: [
+              { name: 'Team', value: teams.find(t => t.id === tid)?.code || 'Unknown', inline: true },
+              { name: 'Event', value: event, inline: true },
+              { name: 'Sector', value: sector, inline: true },
+              { name: 'Type', value: type, inline: true },
+              { name: 'Run #', value: rid.toString(), inline: true },
+              { name: 'Cones/Off', value: `${conesVal} / ${offVal}`, inline: true },
+              { name: 'DSQ', value: dsqVal ? 'Yes' : 'No', inline: true },
+            ]
+          })
+        })
+      } catch (e) {
+        logger.error('Failed to notify discord', e)
+      }
+      
+      toast.success(`${type} logged for Team ${teams.find(t => t.id === tid)?.code}`)
       await loadIncidents()
-      // Only reset penalties, keep team and run selected for multiple logs
       resetPenalties()
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error('Unknown error')
@@ -278,6 +320,21 @@ export default function MarshalAndLiveTrackPage() {
       toast.error(error.message ?? 'Failed to log incident.')
     } finally {
       setLogging(false)
+    }
+  }
+
+  async function handleQuickAction(action: 'DOO+1' | 'OOC+1' | 'DSQ') {
+    if (!teamId || runNumber === null) {
+      toast.error('Select team and run first')
+      return
+    }
+
+    if (action === 'DOO+1') {
+      await logIncidentWithPenalties('DOO', teamId, runNumber, 1, 0, false)
+    } else if (action === 'OOC+1') {
+      await logIncidentWithPenalties('OOC', teamId, runNumber, 0, 1, false)
+    } else if (action === 'DSQ') {
+      await logIncidentWithPenalties('OTHER', teamId, runNumber, 0, 0, true)
     }
   }
 
@@ -362,6 +419,26 @@ export default function MarshalAndLiveTrackPage() {
           
           if (insertError) throw insertError
         }
+      }
+      
+      // Notify Discord for escalated safety
+      try {
+        await fetch('/api/discord/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: 'safety',
+            title: `🚨 SAFETY ESCALATION: ${type.toUpperCase()}`,
+            color: type === 'critical' ? 16711680 : 16753920,
+            fields: [
+              { name: 'Team', value: teams.find(t => t.id === pendingSafetyTeam)?.code || 'Unknown', inline: true },
+              { name: 'Event', value: event, inline: true },
+              { name: 'Sector', value: sector, inline: true },
+            ]
+          })
+        })
+      } catch (e) {
+        logger.error('Failed to notify discord', e)
       }
       
       toast.success(`Safety concern logged as ${type} with penalties`)
@@ -460,15 +537,19 @@ export default function MarshalAndLiveTrackPage() {
   const selectedEvent = eventOptions.find(e => e.value === event)
 
   return (
-    <div className='p-4 sm:p-6 max-w-6xl mx-auto space-y-6 animate-fade-in min-h-screen'>
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className='text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight'>
-          Track Marshal Console
-        </h1>
-        <p className='text-gray-600 text-sm sm:text-base'>
-          Quick incident logging and track activity monitoring
-        </p>
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <Zap className="w-6 h-6 text-indigo-600" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+            Marshal <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Console</span>
+          </h1>
+          <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+            Rapid Incident Logging &amp; Activity Vector
+          </p>
+        </div>
       </div>
 
       {/* Loading State */}
@@ -500,17 +581,20 @@ export default function MarshalAndLiveTrackPage() {
 
       {/* Initial Setup: Sector, Event, Lock */}
       <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-200">
           <CardTitle className="flex items-center gap-2">
             <Flag className="w-5 h-5" />
-            Setup
+            Initialization Phase
           </CardTitle>
+          <CardDescription>
+            Assign Sector & Dynamic Protocol
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">Sector</label>
-              <Select disabled={locked} value={sector ?? undefined} onValueChange={(v) => setSector(v)}>
+              <Select disabled={locked} value={sector || ''} onValueChange={(v) => setSector(v)}>
                 <SelectTrigger className="h-12 text-base">
                   <SelectValue placeholder='Select Sector' />
                 </SelectTrigger>
@@ -528,7 +612,7 @@ export default function MarshalAndLiveTrackPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">Dynamic Event</label>
-              <Select disabled={locked} value={event ?? undefined} onValueChange={(v) => setEvent(v)}>
+              <Select disabled={locked} value={event || ''} onValueChange={(v) => setEvent(v)}>
                 <SelectTrigger className="h-12 text-base">
                   <SelectValue placeholder='Select Event' />
                 </SelectTrigger>
@@ -547,29 +631,26 @@ export default function MarshalAndLiveTrackPage() {
             <div className="space-y-2">
               <label className="text-sm font-semibold text-gray-700">Status</label>
               {!locked ? (
-                <Button 
-                  className='w-full h-12 text-base font-semibold bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800' 
-                  disabled={!sector || !event} 
-                  onClick={() => setLocked(true)}
-                >
-                  <Lock className='mr-2 w-5 h-5' />
-                  Lock Settings
-                </Button>
+                <div className="flex h-12 items-center text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md px-3">
+                  Select Sector and Event to begin
+                </div>
               ) : (
                 <Button 
                   variant='outline' 
                   className='w-full h-12 text-base font-semibold' 
                   onClick={() => {
                     setLocked(false)
+                    setSector(null)
+                    setEvent(null)
                     setTeamId(null)
-                    setRunNumber(null)
+                    setRunNumber(1)
                     resetPenalties()
                     setShowSafetyButtons(false)
                     setPendingSafetyTeam(null)
                   }}
                 >
                   <Unlock className='mr-2 w-5 h-5' />
-                  Unlock
+                  Edit Setup
                 </Button>
               )}
             </div>
@@ -601,45 +682,45 @@ export default function MarshalAndLiveTrackPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
-            {/* Team and Run Selection */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
+            {/* Team Selection Cards */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
                 <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <Car className="w-4 h-4" />
-                  Team
+                  Select Team
                 </label>
-                <Select value={teamId ?? undefined} onValueChange={(v) => setTeamId(v)}>
-                  <SelectTrigger className="h-12 text-base">
-                    <SelectValue placeholder='Select Team' />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teams.map((team) => (
-                      <SelectItem key={team.id} value={team.id} className="text-base">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">{team.code}</Badge>
-                          {team.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-semibold text-gray-700">Run</label>
+                  <Input
+                    type='number'
+                    min={1}
+                    value={runNumber ?? ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setRunNumber(val === '' ? null : Number(val))
+                    }}
+                    placeholder='#'
+                    className='h-8 w-16 text-center text-sm'
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <Flag className="w-4 h-4" />
-                  Run Number
-                </label>
-                <Input
-                  type='number'
-                  min={1}
-                  value={runNumber ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    setRunNumber(val === '' ? null : Number(val))
-                  }}
-                  placeholder='Run #'
-                  className='h-12 text-base'
-                />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1 pr-2">
+                {teams.map((team) => (
+                  <button
+                    key={team.id}
+                    onClick={() => setTeamId(team.id)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${
+                      teamId === team.id
+                        ? 'border-indigo-500 bg-indigo-50 shadow-md ring-2 ring-indigo-200'
+                        : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="font-bold text-lg text-indigo-700">#{team.code}</span>
+                    <span className="text-xs text-gray-500 font-medium truncate w-full text-center mt-1">
+                      {team.name}
+                    </span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -728,28 +809,35 @@ export default function MarshalAndLiveTrackPage() {
                 <AlertCircle className="w-4 h-4" />
                 Incidents
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <Button
                   className='h-14 text-base font-bold bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700'
-                  onClick={() => logIncidentWithPenalties('DOO')}
-                  disabled={!teamId || runNumber === null || logging || showSafetyButtons}
+                  onClick={() => handleQuickAction('DOO+1')}
+                  disabled={!teamId || runNumber === null || logging}
                 >
-                  DOO
+                  DOO (+1 Cone)
                 </Button>
                 <Button
                   className='h-14 text-base font-bold bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-                  onClick={() => logIncidentWithPenalties('OOC')}
-                  disabled={!teamId || runNumber === null || logging || showSafetyButtons}
+                  onClick={() => handleQuickAction('OOC+1')}
+                  disabled={!teamId || runNumber === null || logging}
                 >
-                  OOC
+                  OOC (+1 Off)
                 </Button>
                 <Button
-                  className='h-14 text-base font-bold bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700'
-                  onClick={handleSafetyConcern}
-                  disabled={!teamId || runNumber === null || logging || showSafetyButtons}
+                  className='h-14 text-base font-bold bg-gradient-to-r from-orange-600 to-red-600 hover:from-red-700 hover:to-red-800'
+                  onClick={() => handleQuickAction('DSQ')}
+                  disabled={!teamId || runNumber === null || logging}
+                >
+                  DSQ (Quick)
+                </Button>
+                <Button
+                  className='h-14 text-base font-bold bg-gradient-to-r from-red-600 to-red-800 hover:from-red-800 hover:to-red-900 shadow-md'
+                  onClick={() => logIncidentWithPenalties('Safety', teamId!, runNumber!)}
+                  disabled={!teamId || runNumber === null || logging}
                 >
                   <Shield className="w-5 h-5 mr-2" />
-                  Safety
+                  SAFETY!
                 </Button>
               </div>
               
@@ -831,55 +919,64 @@ export default function MarshalAndLiveTrackPage() {
 
       {/* Recent Incidents */}
       <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-gray-200">
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5" />
-            Recent Incidents (24h)
+            <History className="w-5 h-5" />
+            Recent Incidents
           </CardTitle>
+          <CardDescription>
+            Chronological track activity log
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className='space-y-3'>
-            {incidents.map((inc) => (
-              <Card key={inc.id} className="border-gray-200 hover:border-gray-300 transition-colors">
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <span className="text-gray-500 font-medium">Team:</span>
-                      <Badge variant="outline" className="ml-2">{inc.team_code ?? inc.team_id}</Badge>
+            <div className="space-y-2">
+              {incidents.map((inc) => (
+                <div 
+                  key={inc.id} 
+                  className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-6">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Team</span>
+                      <Badge variant="outline" className="font-bold text-xs">{inc.team_code ?? inc.team_id}</Badge>
                     </div>
-                    <div>
-                      <span className="text-gray-500 font-medium">Type:</span>
-                      <span className="ml-2 font-semibold">{inc.incident_type}</span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Type</span>
+                      <span className="text-sm font-black text-slate-900 leading-none">{inc.incident_type}</span>
                     </div>
-                    <div>
-                      <span className="text-gray-500 font-medium">Sector:</span>
-                      <span className="ml-2">{inc.sector}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500 font-medium">Time:</span>
-                      <span className="ml-2">{new Date(inc.occurred_at).toLocaleTimeString()}</span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Sector</span>
+                      <span className="text-sm font-bold text-slate-600 leading-none">{inc.sector}</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-            {incidents.length === 0 && (
-              <div className='text-gray-500 p-8 text-center'>
-                <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                No incidents logged in the past 24 hours
-              </div>
-            )}
-          </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 block">Time</span>
+                    <span className="text-sm font-mono font-medium text-slate-500">
+                      {new Date(inc.occurred_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {incidents.length === 0 && (
+                <div className='text-gray-500 p-8 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200'>
+                  <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  No incidents logged in the past 24 hours
+                </div>
+              )}
+            </div>
         </CardContent>
       </Card>
 
       {/* Live Track Activity */}
       <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
           <CardTitle className="flex items-center gap-2">
             <Activity className="w-5 h-5" />
             Live Track Activity
           </CardTitle>
+          <CardDescription>
+            Real-time active teams on course
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>

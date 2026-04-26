@@ -86,7 +86,8 @@ type JudgedEventScore = {
   }
 }
 
-const eventId = 'e8447aed-c7a5-4fc7-b198-67ae4a410434' // Engineering Design Event UUID
+// Event name to fetch dynamically
+const EVENT_NAME = 'Engineering Design'
 
 const scoreEntrySchema = z.object({
   criterion_id: z.string().uuid(),
@@ -113,11 +114,7 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
   const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
 
-  // Temporarily admin-only
-  useEffect(() => {
-    if (authProfile === undefined) return
-    if (authProfile?.app_role !== 'admin') router.replace('/dashboard')
-  }, [authProfile, router])
+  // Engineering design is now visible to all roles
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
   const [criteria, setCriteria] = useState<JudgedEventCriterion[]>([])
   const [submittedScores, setSubmittedScores] = useState<JudgedEventScore[]>([])
@@ -171,6 +168,15 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
         if (active && currentRunId === effectRunIdRef.current) {
           setCurrentUser(profileData);
         }
+
+        const { data: eventData, error: eventError } = await supabase
+          .from('judged_events')
+          .select('id')
+          .eq('name', EVENT_NAME)
+          .single();
+        if (!active || currentRunId !== effectRunIdRef.current) return;
+        if (eventError) throw new Error(`Event not found: ${EVENT_NAME}`);
+        const eventId = eventData.id;
 
         // 2. Bookings
         const { data: bookingsData, error: bookingsError } = await supabase
@@ -459,7 +465,7 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
     }
   };
 
-  if (authProfile === undefined || authProfile?.app_role !== 'admin') {
+  if (authProfile === undefined) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
@@ -482,16 +488,19 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 animate-fade-in min-h-screen">
-      {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-          <Award className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
-          Engineering Design Event Scoring
-        </h1>
-        <p className="text-gray-600 max-w-2xl">
-          Score teams across all design criteria. Admins and overall judges can approve entire design slots at once.
-        </p>
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <Award className="w-6 h-6 text-indigo-600" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+            Engineering <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Design</span>
+          </h1>
+          <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+            Structural Validation & Technical Merit Analysis
+          </p>
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -519,7 +528,7 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
                 Design Event Scoring
               </CardTitle>
               <CardDescription>
-                Score your assigned teams criterion-by-criterion with comments
+                Criterion-by-criterion team analysis
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6">
@@ -658,10 +667,10 @@ export default function DesignEventScore({ params, searchParams }: PageProps) {
             <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200">
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle2 className="w-5 h-5" />
-                All Submitted Scores
+                Submitted Scores
               </CardTitle>
               <CardDescription>
-                Approve or reject entire design slots at once
+                Bulk Approval & Verification
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-4">

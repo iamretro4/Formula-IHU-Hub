@@ -36,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# IDE
+.cursor/
+
+# temp / scratch
+scratch/
+supabase/.temp/
+test_db.js
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

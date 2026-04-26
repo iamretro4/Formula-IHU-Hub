@@ -28,11 +28,7 @@ export default function EngineeringDesignResultsPage() {
   const [loading, setLoading] = useState(true)
   const [results, setResults] = useState<Result[]>([])
 
-  // Temporarily admin-only
-  useEffect(() => {
-    if (profile === undefined) return
-    if (profile?.app_role !== 'admin') router.replace('/dashboard')
-  }, [profile, router])
+  // Results are now visible to all roles
 
   useEffect(() => {
     async function fetchResults() {
@@ -92,7 +88,7 @@ export default function EngineeringDesignResultsPage() {
     }
   }
 
-  if (profile === undefined || profile?.app_role !== 'admin') {
+  if (profile === undefined) {
     return (
       <div className="p-6 flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin" />

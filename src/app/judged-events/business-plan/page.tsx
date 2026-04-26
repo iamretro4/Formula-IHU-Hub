@@ -87,7 +87,8 @@ type JudgedEventScore = {
   }
 }
 
-const eventId = 'c583211f-3831-4696-9ad6-5dc23bce91a8' // Business Plan Event UUID
+// Event name to fetch dynamically
+const EVENT_NAME = 'Business Plan Presentation'
 
 const scoreEntrySchema = z.object({
   criterion_id: z.string().uuid(),
@@ -114,11 +115,7 @@ export default function BusinessPlanScore({ params, searchParams }: PageProps) {
   const effectRunIdRef = useRef(0)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
 
-  // Temporarily admin-only
-  useEffect(() => {
-    if (authProfile === undefined) return
-    if (authProfile?.app_role !== 'admin') router.replace('/dashboard')
-  }, [authProfile, router])
+  // Business plan is now visible to all roles
   const [bookings, setBookings] = useState<JudgedEventBooking[]>([])
   const [criteria, setCriteria] = useState<JudgedEventCriterion[]>([])
   const [submittedScores, setSubmittedScores] = useState<JudgedEventScore[]>([])
@@ -171,6 +168,15 @@ export default function BusinessPlanScore({ params, searchParams }: PageProps) {
         if (active && currentRunId === effectRunIdRef.current) {
           setCurrentUser(profileData);
         }
+
+        const { data: eventData, error: eventError } = await supabase
+          .from('judged_events')
+          .select('id')
+          .eq('name', EVENT_NAME)
+          .single();
+        if (!active || currentRunId !== effectRunIdRef.current) return;
+        if (eventError) throw new Error(`Event not found: ${EVENT_NAME}`);
+        const eventId = eventData.id;
 
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('judged_event_bookings')
@@ -459,7 +465,7 @@ export default function BusinessPlanScore({ params, searchParams }: PageProps) {
     }
   };
 
-  if (authProfile === undefined || authProfile?.app_role !== 'admin') {
+  if (authProfile === undefined) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center space-y-4">
@@ -482,16 +488,20 @@ export default function BusinessPlanScore({ params, searchParams }: PageProps) {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 space-y-6 animate-fade-in min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
       {/* Header */}
-      <div className="space-y-2">
-        <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-          <Briefcase className="w-8 h-8 sm:w-10 sm:h-10 text-primary" />
-          Business Plan Event Scoring
-        </h1>
-        <p className="text-gray-600 max-w-2xl">
-          Score teams across all business plan criteria. Admins and BP judges can approve entire slots at once.
-        </p>
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <Award className="w-6 h-6 text-indigo-600" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+            Business <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Plan</span>
+          </h1>
+          <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+            Economic Viability & Market Strategy Assessment
+          </p>
+        </div>
       </div>
 
       {/* Error Alert */}

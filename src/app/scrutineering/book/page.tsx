@@ -5,7 +5,7 @@ import getSupabaseClient from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { 
   AlertCircle, 
@@ -22,7 +22,9 @@ import {
   Battery,
   Plus,
   RefreshCw,
-  AlertTriangle
+  AlertTriangle,
+  Users,
+  FileText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { addMinutes, parseISO, format } from 'date-fns'
@@ -30,29 +32,36 @@ import { todayInEventTz } from '@/lib/utils/formatting'
 import { logger } from '@/lib/utils/logger'
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
-  Electrical: <Zap className="w-5 h-5" />,
-  Mechanical: <Wrench className="w-5 h-5" />,
-  Accumulator: <Battery className="w-5 h-5" />,
+  'Electrical Inspection': <Zap className="w-5 h-5" />,
+  'Mechanical Inspection': <Wrench className="w-5 h-5" />,
+  'Accumulator Inspection': <Battery className="w-5 h-5" />,
+  'Pre-Inspection': <Users className="w-5 h-5" />,
+  'Electrical': <Zap className="w-5 h-5" />,
+  'Mechanical': <Wrench className="w-5 h-5" />,
+  'Accumulator': <Battery className="w-5 h-5" />,
 }
 
-const TYPE_COLORS: Record<string, { bg: string; text: string; border: string; gradient: string }> = {
+const TYPE_COLORS: Record<string, { bg: string; text: string; border: string; gradient: string; accent: string }> = {
   Electrical: { 
     bg: 'bg-yellow-50', 
     text: 'text-yellow-800', 
-    border: 'border-yellow-300',
-    gradient: 'from-yellow-50 to-yellow-100/50'
+    border: 'border-yellow-200',
+    gradient: 'from-yellow-400/20 to-yellow-400/5',
+    accent: 'bg-yellow-500'
   },
   Mechanical: { 
     bg: 'bg-blue-50', 
     text: 'text-blue-800', 
-    border: 'border-blue-300',
-    gradient: 'from-blue-50 to-blue-100/50'
+    border: 'border-blue-200',
+    gradient: 'from-blue-400/20 to-blue-400/5',
+    accent: 'bg-blue-500'
   },
   Accumulator: { 
-    bg: 'bg-green-50', 
-    text: 'text-green-800', 
-    border: 'border-green-300',
-    gradient: 'from-green-50 to-green-100/50'
+    bg: 'bg-emerald-50', 
+    text: 'text-emerald-800', 
+    border: 'border-emerald-200',
+    gradient: 'from-emerald-400/20 to-emerald-400/5',
+    accent: 'bg-emerald-500'
   },
 }
 
@@ -113,11 +122,12 @@ export default function ScrutineeringBookPage() {
   const adminViewTeamRef = useRef<string | null>(null)
   const effectRunIdRef = useRef(0)
 
-  // Team leaders only get User Management; redirect if they hit scrutineering
+  // Restricted roles redirect (e.g. viewers or unassigned members)
   const router = useRouter()
   useEffect(() => {
     if (authLoading || !authProfile) return
-    if (authProfile.app_role === 'team_leader') {
+    const allowedRoles = ['admin', 'scrutineer', 'team_leader', 'inspection_responsible']
+    if (!allowedRoles.includes(authProfile.app_role)) {
       router.replace('/dashboard')
     }
   }, [authLoading, authProfile, router])
@@ -143,123 +153,20 @@ export default function ScrutineeringBookPage() {
   }, [authLoading, authProfile, teams, adminViewTeam])
 
   // Initial load - only depends on auth, not on adminViewTeam to avoid cycles
-  useEffect(() => {
-    // Increment run ID to track this effect execution
-    const currentRunId = ++effectRunIdRef.current
-    // Reset loading state when effect runs
-    setInitialLoading(true)
-    setError(null)
+  // Consolidated data loading to prevent state drift and redundant fetching
+  const loadInitialData = async (targetTeamId: string | null, runId: number, active: boolean) => {
+    if (!targetTeamId) return;
     
-    // Wait for auth to be ready and profile to be loaded
-    if (authLoading || !user || !authProfile) {
-      if (currentRunId === effectRunIdRef.current) {
-        setInitialLoading(false)
-      }
-      return
-    }
-    
-    let active = true
-    ;(async () => {
-      try {
-        setUserRole(authProfile.app_role ?? null)
-      
-      // Load teams for admin first (admins can book for any team)
-      let targetTeamId: string | null = null
-      if (authProfile.app_role === 'admin') {
-        const { data: allTeams, error: teamsError } = await supabase.from('teams').select('id, name').order('name')
-        if (!active || currentRunId !== effectRunIdRef.current) return
-        if (teamsError) {
-          logger.error('[Booking] Error loading teams', teamsError, { context: 'load_teams' })
-          if (active && currentRunId === effectRunIdRef.current) {
-            setError(`Failed to load teams: ${teamsError.message}`)
-            setInitialLoading(false)
-          }
-          return
-        }
-        const loadedTeams = (allTeams || []) as Team[]
-        setTeams(loadedTeams)
-        
-        if (loadedTeams.length === 0) {
-          if (active && currentRunId === effectRunIdRef.current) {
-            setError('No teams found in the database. Please contact an administrator.')
-            setInitialLoading(false)
-          }
-          return
-        }
-        
-        // Use adminViewTeam from ref/state if set, otherwise use first team from just-loaded teams
-        targetTeamId = adminViewTeamRef.current ?? adminViewTeam ?? (loadedTeams.length > 0 ? loadedTeams[0].id : null)
-        if (!adminViewTeam && loadedTeams.length > 0) {
-          setAdminViewTeam(loadedTeams[0].id)
-          adminViewTeamRef.current = loadedTeams[0].id
-        }
-      } else {
-        // For non-admin users, require team_id
-        if (!authProfile.team_id) {
-          if (active && currentRunId === effectRunIdRef.current) {
-            setError('No team profile found. Please complete your profile first.')
-            setInitialLoading(false)
-          }
-          return
-        }
-        // Set teamId for non-admin users
-        setTeamId(authProfile.team_id)
-        targetTeamId = authProfile.team_id
-        if (!adminViewTeam) {
-          setAdminViewTeam(authProfile.team_id)
-          adminViewTeamRef.current = authProfile.team_id
-        }
-      }
-      
-      if (!targetTeamId) {
-        if (active && currentRunId === effectRunIdRef.current) {
-          setError(authProfile.app_role === 'admin' ? 'Please select a team to book for' : 'No team selected')
-          setInitialLoading(false)
-        }
-        return
-      }
-      
-      // Verify authentication before querying
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (!active || currentRunId !== effectRunIdRef.current) return
-      if (sessionError) {
-        logger.error('[Booking] Session error', sessionError, { context: 'session_check' })
-        setError(`Authentication error: ${sessionError.message}`)
-        setInitialLoading(false)
-        return
-      }
-      if (!session) {
-        logger.error('[Booking] No active session found', undefined, { context: 'session_check' })
-        setError('Not authenticated. Please sign in again.')
-        setInitialLoading(false)
-        return
-      }
-      logger.debug('[Booking] Session verified', { userId: session.user.id })
-      
-      logger.debug('[Booking] Fetching inspection types from database')
+    try {
+      // 1. Fetch inspection types with class-specific prerequisites
       const { data: types, error: typesError } = await supabase
         .from('inspection_types')
-        .select('id, name, duration_minutes, concurrent_slots, prerequisites, active, key')
+        .select('id, name, duration_minutes, concurrent_slots, ev_prerequisites, cv_prerequisites, active, key')
         .order('sort_order', { ascending: true })
-      if (!active || currentRunId !== effectRunIdRef.current) return
-      if (typesError) {
-        logger.error('[Booking] Error fetching inspection types', typesError, { context: 'fetch_inspection_types' })
-        setError(`Failed to load inspection types: ${typesError.message}`)
-        setInitialLoading(false)
-        return
-      }
-      logger.debug('[Booking] Inspection types query result', { 
-        count: types?.length || 0, 
-        types: types?.map(t => ({ id: t.id, name: t.name, active: t.active })) 
-      })
-      if (!types || types.length === 0) {
-        logger.warn('[Booking] No inspection types found in database', { context: 'fetch_inspection_types' })
-        setError('No inspection types found in the database. Please contact an administrator.')
-        setInitialLoading(false)
-        return
-      }
-      
-      // Get bookings with their inspection results to check pass/fail status
+
+      if (typesError) throw typesError;
+
+      // 2. Fetch team bookings with results
       const { data: teamB, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
@@ -277,191 +184,145 @@ export default function ScrutineeringBookPage() {
           inspection_results(status)
         `)
         .eq('team_id', targetTeamId)
-      if (!active || currentRunId !== effectRunIdRef.current) return
-      if (bookingsError) {
-        setError(bookingsError.message)
-        setInitialLoading(false)
-        return
-      }
-      
+
+      if (bookingsError) throw bookingsError;
+
+      if (!active || runId !== effectRunIdRef.current) return;
+
       setTeamBookings((teamB ?? []) as Booking[])
-      if (!active || currentRunId !== effectRunIdRef.current) return
-      
-      logger.debug('[Booking] Processing inspection types', { count: types?.length || 0 })
+
+      // 3. Process inspection types with robust prerequisite logic
       const processedTypes = ((types ?? []) as any[]).map((t: any) => {
-          // Check if passed - look at inspection_results status, not bookings status
-          const passed = (teamB as any[])?.some(
-            (b: any) => b.inspection_type_id === t.id && 
-            b.inspection_results && 
-            Array.isArray(b.inspection_results) && 
-            b.inspection_results.length > 0 &&
-            b.inspection_results[0]?.status === 'passed'
-          )
-          
-          // Check if team has an active booking (booking status is not completed, cancelled, or no_show)
-          const hasActiveBooking = (teamB as any[])?.some(
-            (b: any) => b.inspection_type_id === t.id && 
-            !['completed', 'cancelled', 'no_show'].includes(b.status)
-          )
-          
-          let prerequisitesMet = true
-          if (Array.isArray(t.prerequisites) && t.prerequisites.length > 0) {
-            for (const reqKey of t.prerequisites) {
-              const prereqType = ((types ?? []) as any[]).find((tt: any) => tt.key === reqKey)
-              if (prereqType) {
-                // Check if prerequisite passed - look at inspection_results
-                const prereqPassed = (teamB as any[])?.some(
-                  (b: any) => b.inspection_type_id === prereqType.id && 
-                  b.inspection_results && 
-                  Array.isArray(b.inspection_results) && 
-                  b.inspection_results.length > 0 &&
-                  b.inspection_results[0]?.status === 'passed'
-                )
-                if (!prereqPassed) prerequisitesMet = false
+        // Robust check for passed/failed results
+        const relevantBookings = (teamB as any[])?.filter(b => b.inspection_type_id === t.id)
+        const results = relevantBookings.flatMap(b => {
+          const res = b.inspection_results
+          return Array.isArray(res) ? res : (res ? [res] : [])
+        })
+        
+        const passed = results.some((r: any) => r.status === 'passed')
+        const failed = !passed && results.some((r: any) => r.status === 'failed')
+        
+        // Active booking check
+        const hasActiveBooking = relevantBookings?.some(
+          (b: any) => !['completed', 'cancelled', 'no_show'].includes(b.status)
+        )
+        
+        let prerequisitesMet = true
+        let failedPrereqName = ''
+        let missingPrereqName = ''
+
+        // Determinte prerequisites based on vehicle class
+        const currentTeam = teams.find(t => t.id === targetTeamId) as any
+        const teamClass = currentTeam?.vehicle_class || 'EV'
+        const classPrereqs = teamClass === 'EV' ? (t.ev_prerequisites || []) : (t.cv_prerequisites || [])
+        
+        // Skip if this inspection type is NOT applicable to this class
+        if (teamClass === 'EV' && t.ev_prerequisites === null) return null
+        if (teamClass === 'CV' && t.cv_prerequisites === null) return null
+
+        if (Array.isArray(classPrereqs) && classPrereqs.length > 0) {
+          for (const reqKey of classPrereqs) {
+            const prereqType = ((types ?? []) as any[]).find((tt: any) => tt.key === reqKey)
+            if (prereqType) {
+              const prereqResults = (teamB as any[])?.filter(b => b.inspection_type_id === prereqType.id)
+                .flatMap(b => {
+                  const res = b.inspection_results
+                  return Array.isArray(res) ? res : (res ? [res] : [])
+                })
+              
+              const prereqPassed = prereqResults.some((r: any) => r.status === 'passed')
+              
+              if (!prereqPassed) {
+                prerequisitesMet = false
+                const hasFailed = prereqResults.some((r: any) => r.status === 'failed')
+                if (hasFailed) failedPrereqName = prereqType.name
+                else if (!missingPrereqName) missingPrereqName = prereqType.name
               }
             }
           }
-          return {
-            id: t.id,
-            name: t.name,
-            duration_minutes: t.duration_minutes ?? 120,
-            concurrent_slots: t.concurrent_slots ?? 1,
-            prerequisites: t.prerequisites ?? [],
-            key: t.key,
-            active: !!t.active,
-            can_book: !!t.active && prerequisitesMet && !passed && !hasActiveBooking,
-            passed: !!passed,
-            subtitle: !prerequisitesMet
-              ? `You must pass: ${(Array.isArray(t.prerequisites) ? t.prerequisites.join(', ') : t.prerequisites)} before booking`
-              : passed
-                ? "Already completed"
-                : hasActiveBooking
-                  ? "Already has an active booking for this inspection type"
+        }
+
+        return {
+          id: t.id,
+          name: t.name,
+          duration_minutes: t.duration_minutes ?? 120,
+          concurrent_slots: t.concurrent_slots ?? 1,
+          prerequisites: classPrereqs,
+          key: t.key,
+          passed: !!passed,
+          can_book: (userRole === 'admin' || userRole === 'scrutineer') 
+            ? !!t.active && !hasActiveBooking
+            : !!t.active && prerequisitesMet && !passed && !hasActiveBooking,
+          is_admin_override: (userRole === 'admin' || userRole === 'scrutineer') && (!prerequisitesMet || passed),
+          subtitle: !prerequisitesMet
+            ? failedPrereqName 
+              ? `BLOCKED: Previous ${failedPrereqName} attempt FAILED. Fix and re-inspect.`
+              : `LOCKED: You must pass ${missingPrereqName} first`
+            : passed
+              ? "Inspection passed successfully"
+              : hasActiveBooking
+                ? "Active session currently in progress"
+                : failed
+                  ? "Previous attempt failed. Ready for re-scrutineering."
                   : undefined
-          }
-        })
-      logger.debug('[Booking] Processed inspection types', { count: processedTypes.length })
-      if (active && currentRunId === effectRunIdRef.current) {
+        }
+      }).filter(Boolean)
+
+      if (active && runId === effectRunIdRef.current) {
         setInspectionTypes(processedTypes)
         setInitialLoading(false)
       }
-      } catch (err) {
-        logger.error('[Booking] Unexpected error in initial load', err, { context: 'initial_load' })
-        if (active && currentRunId === effectRunIdRef.current) {
-          setError(err instanceof Error ? err.message : 'An unexpected error occurred')
-          setInitialLoading(false)
-        }
+    } catch (err) {
+      logger.error('[Booking] Error loading data', err, { context: 'load_data', teamId: targetTeamId })
+      if (active && runId === effectRunIdRef.current) {
+        setError(err instanceof Error ? err.message : 'Failed to load data')
+        setInitialLoading(false)
       }
-    })()
-    return () => { 
-      active = false
-      // Don't reset loading state here - let the new effect run handle it
     }
-  }, [authLoading, user, authProfile, supabase, adminViewTeam])
+  }
 
-  // Reload data when admin changes selected team
   useEffect(() => {
-    if (authLoading || !user || !authProfile || !adminViewTeam) return
-    if (authProfile.app_role !== 'admin') return // Only for admins
+    const currentRunId = ++effectRunIdRef.current
+    setInitialLoading(true)
+    setError(null)
+    
+    if (authLoading || !user || !authProfile) {
+      if (currentRunId === effectRunIdRef.current) setInitialLoading(false)
+      return
+    }
     
     let active = true
-    ;(async () => {
-      const targetTeamId = adminViewTeam
-      if (!targetTeamId) return
-      
-      // Verify session
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session || !active) return
-      
-      const { data: types, error: typesError } = await supabase
-        .from('inspection_types')
-        .select('id, name, duration_minutes, concurrent_slots, prerequisites, active, key')
-        .order('sort_order', { ascending: true })
-      if (!active) return
-      if (typesError || !types) {
-        logger.error('[Booking] Error reloading inspection types', typesError, { context: 'reload_inspection_types' })
-        return
-      }
-      
-      // Get bookings with their inspection results to check pass/fail status
-      const { data: teamB } = await supabase
-        .from('bookings')
-        .select(`
-          id,
-          team_id,
-          inspection_type_id, 
-          date,
-          start_time,
-          end_time,
-          resource_index,
-          status,
-          notes,
-          is_rescrutineering,
-          created_by,
-          inspection_results(status)
-        `)
-        .eq('team_id', targetTeamId)
-      if (!active) return
-      
-      setTeamBookings((teamB ?? []) as Booking[])
-      
-      setInspectionTypes(
-        ((types ?? []) as any[]).map((t: any) => {
-          // Check if passed - look at inspection_results status, not bookings status
-          const passed = (teamB as any[])?.some(
-            (b: any) => b.inspection_type_id === t.id && 
-            b.inspection_results && 
-            Array.isArray(b.inspection_results) && 
-            b.inspection_results.length > 0 &&
-            b.inspection_results[0]?.status === 'passed'
-          )
-          
-          // Check if team has an active booking (booking status is not completed, cancelled, or no_show)
-          const hasActiveBooking = (teamB as any[])?.some(
-            (b: any) => b.inspection_type_id === t.id && 
-            !['completed', 'cancelled', 'no_show'].includes(b.status)
-          )
-          
-          let prerequisitesMet = true
-          if (Array.isArray(t.prerequisites) && t.prerequisites.length > 0) {
-            for (const reqKey of t.prerequisites) {
-              const prereqType = ((types ?? []) as any[]).find((tt: any) => tt.key === reqKey)
-              if (prereqType) {
-                // Check if prerequisite passed - look at inspection_results
-                const prereqPassed = (teamB as any[])?.some(
-                  (b: any) => b.inspection_type_id === prereqType.id && 
-                  b.inspection_results && 
-                  Array.isArray(b.inspection_results) && 
-                  b.inspection_results.length > 0 &&
-                  b.inspection_results[0]?.status === 'passed'
-                )
-                if (!prereqPassed) prerequisitesMet = false
-              }
-            }
-          }
-          return {
-            id: t.id,
-            name: t.name,
-            duration_minutes: t.duration_minutes ?? 120,
-            concurrent_slots: t.concurrent_slots ?? 1,
-            prerequisites: t.prerequisites ?? [],
-            key: t.key,
-            active: !!t.active,
-            can_book: !!t.active && prerequisitesMet && !passed && !hasActiveBooking,
-            passed: !!passed,
-            subtitle: !prerequisitesMet
-              ? `You must pass: ${(Array.isArray(t.prerequisites) ? t.prerequisites.join(', ') : t.prerequisites)} before booking`
-              : passed
-                ? "Already completed"
-                : hasActiveBooking
-                  ? "Already has an active booking for this inspection type"
-                  : undefined
-          }
-        })
-      )
-    })()
+    setUserRole(authProfile.app_role || '')
+    setTeamId(authProfile.team_id || null)
+    const targetTeamId = authProfile.app_role === 'admin' 
+      ? (adminViewTeam ?? adminViewTeamRef.current) 
+      : authProfile.team_id
+
+    // Load data flow
+    if (authProfile.app_role === 'admin' && teams.length === 0) {
+      // First time loading teams for admin
+      supabase.from('teams').select('id, name').order('name').then(({ data, error }) => {
+        if (error) {
+          setError(`Failed to load teams: ${error.message}`)
+          return
+        }
+        const loadedTeams = (data || []) as Team[]
+        setTeams(loadedTeams)
+        const initialTeamId = adminViewTeam ?? (loadedTeams.length > 0 ? loadedTeams[0].id : null)
+        if (initialTeamId && !adminViewTeam) {
+          setAdminViewTeam(initialTeamId)
+          adminViewTeamRef.current = initialTeamId
+        }
+        loadInitialData(initialTeamId, currentRunId, active)
+      })
+    } else {
+      loadInitialData(targetTeamId, currentRunId, active)
+    }
+
     return () => { active = false }
-  }, [adminViewTeam, authLoading, user, authProfile, supabase])
+  }, [authLoading, user, authProfile, adminViewTeam])
+
 
   // Reserved slots for selected inspection type, for today
   useEffect(() => {
@@ -510,6 +371,7 @@ export default function ScrutineeringBookPage() {
 
   function isSlotAvailable(time: string) {
     if (!selectedInspectionType) return false
+    if (userRole === 'admin') return true // Admins can book any slot
     const reservedCount = reservedSlots[time] || 0
     return reservedCount < selectedInspectionType.concurrent_slots
   }
@@ -536,7 +398,6 @@ export default function ScrutineeringBookPage() {
       }
 
       // Check if team already has an active booking for this inspection type
-      // Active means booking status is not 'completed', 'cancelled', or 'no_show'
       const { data: existingBookings, error: existingError } = await supabase
         .from('bookings')
         .select('id, status, date, start_time')
@@ -554,9 +415,47 @@ export default function ScrutineeringBookPage() {
         throw new Error(
           `This team already has an active ${selectedInspectionType.name} inspection ` +
           `(${existing.status}) scheduled. ` +
-          `Please wait until the current inspection is marked as passed or failed before booking another.`
+          `Please wait until the current session is finished.`
         )
       }
+
+      // --- ADD PREREQUISITE VALIDATION ON SUBMISSION (Bypass for admins/scrutineers) ---
+      const isStaff = userRole === 'admin' || userRole === 'scrutineer'
+      if (!isStaff) {
+        const { data: teamHistory, error: historyError } = await supabase
+          .from('bookings')
+          .select(`
+            inspection_type_id,
+            inspection_results(status)
+          `)
+          .eq('team_id', useTeamId)
+
+        if (historyError) throw historyError;
+
+        // Fetch all inspection types to map keys to IDs
+        const { data: allTypes } = await supabase.from('inspection_types').select('*')
+        const { data: teamData } = await supabase.from('teams').select('vehicle_class').eq('id', useTeamId).single()
+        const teamClass = teamData?.vehicle_class || 'EV'
+        const classPrereqs = teamClass === 'EV' ? (selectedInspectionType.ev_prerequisites as string[]) : (selectedInspectionType.cv_prerequisites as string[])
+
+        if (Array.isArray(classPrereqs) && classPrereqs.length > 0) {
+          for (const reqKey of classPrereqs) {
+            const prereqType = (allTypes ?? []).find(tt => tt.key === reqKey)
+            if (prereqType) {
+              const hasPass = (teamHistory ?? []).some(b => {
+                const res = b.inspection_results
+                if (!res) return false
+                const statusArray = Array.isArray(res) ? res : [res]
+                return statusArray.some((r: any) => r.status === 'passed')
+              })
+              if (!hasPass) {
+                throw new Error(`Prerequisite not met: Team must pass ${prereqType.name} before booking ${selectedInspectionType.name}.`)
+              }
+            }
+          }
+        }
+      }
+      // ------------------------------------------------
 
       // Fetch bookings for this slot and find first available lane
       const { data: bookings, error: bookingsError } = await supabase
@@ -573,8 +472,12 @@ export default function ScrutineeringBookPage() {
       
       const reservedLanes = new Set(((bookings ?? []) as any[]).map((b: any) => b.resource_index))
       let lane = 1;
-      while (reservedLanes.has(lane) && lane <= (selectedInspectionType?.concurrent_slots ?? 1)) lane++
-      if (lane > (selectedInspectionType?.concurrent_slots ?? 1)) {
+      
+      // Find first free lane
+      while (reservedLanes.has(lane)) lane++
+      
+      // Only block regular users if lane exceeds concurrent_slots
+      if (userRole !== 'admin' && lane > (selectedInspectionType?.concurrent_slots ?? 1)) {
         throw new Error('All slots are full. Please refresh and try another time.')
       }
 
@@ -682,24 +585,26 @@ export default function ScrutineeringBookPage() {
           if (bookingsWithResults) {
             // Update inspection types with new booking status
             setInspectionTypes(prev => prev.map(t => {
-              // Check if passed - look at inspection_results
-              const passed = (bookingsWithResults as any[])?.some(
-                (b: any) => b.inspection_type_id === t.id && 
-                b.inspection_results && 
-                Array.isArray(b.inspection_results) && 
-                b.inspection_results.length > 0 &&
-                b.inspection_results[0]?.status === 'passed'
-              )
+              // Robust check for passed/failed results
+              const relevantBookings = (bookingsWithResults as any[])?.filter(b => b.inspection_type_id === t.id)
+              const results = relevantBookings.flatMap(b => {
+                const res = b.inspection_results
+                return Array.isArray(res) ? res : (res ? [res] : [])
+              })
+              
+              const passed = results.some((r: any) => r.status === 'passed')
               
               // Check if active booking - booking status not completed/cancelled/no_show
-              const hasActiveBooking = (bookingsWithResults as any[])?.some(
-                (b: any) => b.inspection_type_id === t.id && 
-                !['completed', 'cancelled', 'no_show'].includes(b.status)
+              const hasActiveBooking = relevantBookings?.some(
+                (b: any) => !['completed', 'cancelled', 'no_show'].includes(b.status)
               )
               
               return {
                 ...t,
-                can_book: t.active && !passed && !hasActiveBooking,
+                can_book: userRole === 'admin'
+                  ? t.active && !hasActiveBooking
+                  : t.active && !passed && !hasActiveBooking,
+                passed: !!passed,
                 subtitle: passed
                   ? "Already completed"
                   : hasActiveBooking
@@ -742,38 +647,40 @@ export default function ScrutineeringBookPage() {
 
   // Admin team selector
   const adminTeamSelector = userRole === 'admin' && teams.length > 0 && (
-    <Card className="mb-6 border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-primary/10 shadow-md">
-      <CardHeader className="border-b border-primary/20">
-        <CardTitle className="flex items-center gap-2 text-primary">
-          <span className="w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold">A</span>
-          Admin Booking Mode
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-6">
-        <label className="block text-sm font-semibold text-gray-700 mb-3">
-          Select Team to Book For:
-        </label>
-        <select
-          value={adminViewTeam ?? ''}
-          onChange={e => {
-            setAdminViewTeam(e.target.value)
-            // Reset selection when changing teams
-            setSelectedInspectionType(null)
-            setSelectedTime("")
-            setNotes("")
-            setError(null)
-          }}
-          className="w-full px-4 py-3 rounded-lg border-2 border-primary/30 bg-white focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 font-semibold text-gray-900"
-        >
-          {teams.map(team => (
-            <option key={team.id} value={team.id}>{team.name}</option>
-          ))}
-        </select>
-        <p className="text-xs text-gray-600 mt-2 flex items-center gap-1">
-          <Info className="w-3 h-3" />
-          You can book inspections for any team as an administrator.
-        </p>
-      </CardContent>
+    <Card className="mb-4 overflow-hidden border-none shadow-xl bg-slate-900 ring-1 ring-white/10">
+      <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent pointer-events-none" />
+      <div className="relative py-3 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center border border-indigo-500/30 shadow-lg shrink-0">
+            <Users className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <span className="text-sm font-black text-white tracking-tight leading-tight block">Intelligence Oversight</span>
+            <p className="text-[9px] text-indigo-300 font-bold uppercase tracking-widest leading-tight">Admin Selection Mode</p>
+          </div>
+        </div>
+        
+        <div className="flex-1 max-w-sm">
+          <label className="block text-[8px] font-black text-slate-500 uppercase tracking-[0.2em] mb-1 px-1">
+            Target Team Designation
+          </label>
+          <select
+            value={adminViewTeam ?? ''}
+            onChange={e => {
+              setAdminViewTeam(e.target.value)
+              setSelectedInspectionType(null)
+              setSelectedTime("")
+              setNotes("")
+              setError(null)
+            }}
+            className="w-full px-3 py-2 rounded-lg border border-slate-700 bg-slate-800/50 text-sm text-white font-bold focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all appearance-none"
+          >
+            {teams.map(team => (
+              <option key={team.id} value={team.id}>{team.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
     </Card>
   )
 
@@ -934,39 +841,37 @@ export default function ScrutineeringBookPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6 animate-fade-in min-h-screen">
+    <div className="p-4 sm:p-6 md:p-8 max-w-6xl mx-auto space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-            <Calendar className="w-8 h-8 text-primary" />
-            Book Inspection
-          </h1>
-          <div className="mt-2 flex items-center gap-2 text-gray-600">
-            <Clock className="w-4 h-4" />
-            <p className="text-base font-medium">
-              Available slots for: <span className="font-semibold text-primary">{todayDate}</span>
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+            <Calendar className="w-6 h-6 text-indigo-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+              Inspection <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Selection</span>
+            </h1>
+            <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+              Technical Scrutineering Slot Allocation
             </p>
-            {userRole === 'admin' && adminViewTeam && (
-              <Badge variant="outline" className="ml-2 bg-primary/10 text-primary border-primary/30">
-                Admin Mode
-              </Badge>
-            )}
           </div>
         </div>
-        {error && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setError(null)
-              window.location.reload()
-            }}
-            className="gap-2"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </Button>
-        )}
+        <div className="flex items-center gap-3">
+          {error && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setError(null)
+                window.location.reload()
+              }}
+              className="gap-2 rounded-xl h-9 px-3"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span className="font-bold uppercase text-[9px] tracking-widest">Refresh</span>
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -986,15 +891,17 @@ export default function ScrutineeringBookPage() {
 
       {adminTeamSelector}
 
-      {/* Step 1: Select Inspection Type */}
       <Card className="shadow-lg border-gray-200">
-        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-200">
           <CardTitle className="flex items-center gap-2">
-            <span className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
+            <span className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 font-black text-sm">1</span>
             Select Inspection Type
           </CardTitle>
+          <CardDescription>
+            Choose the technical module for validation
+          </CardDescription>
         </CardHeader>
-        <CardContent className="pt-6">
+        <CardContent className="pt-5">
           {inspectionTypes.length === 0 && !initialLoading && !error && (
             <div className="mb-4 p-6 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
               <div className="flex items-center gap-3 text-yellow-800">
@@ -1018,25 +925,33 @@ export default function ScrutineeringBookPage() {
                   onClick={() => t.can_book ? setSelectedInspectionType(t) : null}
                   disabled={!t.can_book}
                   className={`
-                    flex flex-col items-start border-2 rounded-xl px-5 py-4 transition-all duration-200
+                    flex flex-col items-start border-2 rounded-2xl px-5 py-5 transition-all duration-300 relative overflow-hidden
                     ${t.can_book 
-                      ? `bg-gradient-to-br ${colors.gradient} hover:shadow-lg hover:scale-[1.02] cursor-pointer ${isSelected ? `border-primary ring-2 ring-primary/20 shadow-md` : colors.border}` 
-                      : "bg-gray-100 opacity-60 cursor-not-allowed border-gray-300"
+                      ? `bg-white hover:shadow-xl hover:-translate-y-1 cursor-pointer ${isSelected ? `border-primary ring-4 ring-primary/10 shadow-lg` : 'border-gray-100 hover:border-gray-200'}` 
+                      : "bg-gray-50 opacity-60 cursor-not-allowed border-gray-100"
                     }
                   `}
                 >
-                  <div className="flex items-center gap-2 mb-2 w-full">
-                    {TYPE_ICONS[t.name]}
-                    <div className={`font-bold text-lg ${colors.text}`}>{t.name}</div>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm text-gray-600 mb-2">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{t.duration_minutes} min</span>
+                  <div className={`absolute inset-0 bg-gradient-to-br ${colors.gradient} opacity-20 pointer-events-none`} />
+                  <div className="flex items-start gap-4 mb-4 relative w-full">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
+                      isSelected ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' : 'bg-gray-50 text-gray-400 border-gray-100'
+                    }`}>
+                      {TYPE_ICONS[t.name] || <FileText className="w-6 h-6" />}
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {t.concurrent_slots} slot{t.concurrent_slots > 1 ? 's' : ''}
-                    </Badge>
+                    <div className="min-w-0 pt-0.5">
+                      <div className={`font-black text-lg leading-tight uppercase tracking-tight truncate ${isSelected ? 'text-gray-900' : 'text-gray-700'}`}>
+                        {t.name}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-bold border-gray-200 text-gray-500">
+                          {t.duration_minutes} MIN
+                        </Badge>
+                        <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-bold border-gray-200 text-gray-500 uppercase">
+                          {t.concurrent_slots} SLOTS
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
                   {t.subtitle && (
                     <div className={`text-xs font-semibold mt-1 flex items-center gap-1 ${t.passed ? "text-green-600" : "text-red-500"}`}>
@@ -1055,16 +970,18 @@ export default function ScrutineeringBookPage() {
           </div>
         </CardContent>
       </Card>
-      {/* Step 2: Select Time Slot */}
       {selectedInspectionType && (
         <Card className="shadow-lg border-gray-200">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b border-gray-200">
+          <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-200">
             <CardTitle className="flex items-center gap-2">
-              <span className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">2</span>
+              <span className="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600 font-black text-sm">2</span>
               Select Time Slot - {selectedInspectionType.name}
             </CardTitle>
+            <CardDescription>
+              Choose an available window for the session
+            </CardDescription>
           </CardHeader>
-          <CardContent className="pt-6">
+          <CardContent className="pt-5">
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3 mb-6">
               {slots.map(time => {
                 const full = !isSlotAvailable(time)

@@ -74,7 +74,7 @@ export function useChecklistManager({
           .from('inspection_progress')
           .select(`
             *,
-            user_profiles!inspection_progress_user_id_fkey(first_name, last_name)
+            user_profiles(first_name, last_name)
           `)
           .eq('booking_id', bookingId)
 

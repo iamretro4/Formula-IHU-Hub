@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -36,6 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import {
   DropdownMenu,
@@ -108,6 +110,7 @@ export default function UserManagementPage() {
   const [editingRole, setEditingRole] = useState<string>('')
   const [editingTeamId, setEditingTeamId] = useState<string>('')
   const [editingEmail, setEditingEmail] = useState<string>('')
+  const [editUserOpen, setEditUserOpen] = useState(false)
   const [saving, setSaving] = useState<string | null>(null)
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null)
   const [userDetailsOpen, setUserDetailsOpen] = useState(false)
@@ -308,6 +311,7 @@ export default function UserManagementPage() {
     setEditingRole(user.app_role || '')
     setEditingTeamId(user.team_id ?? '')
     setEditingEmail(user.email ?? '')
+    setEditUserOpen(true)
   }
 
   const handleCancelEdit = () => {
@@ -315,6 +319,7 @@ export default function UserManagementPage() {
     setEditingRole('')
     setEditingTeamId('')
     setEditingEmail('')
+    setEditUserOpen(false)
   }
 
   const handleSaveRole = async (userId: string) => {
@@ -462,10 +467,7 @@ export default function UserManagementPage() {
       ))
 
       toast.success(emailChanged ? 'User updated successfully' : 'Role updated successfully')
-      setEditingUserId(null)
-      setEditingRole('')
-      setEditingTeamId('')
-      setEditingEmail('')
+      handleCancelEdit()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update role'
       logger.error('Role update failed', error, { context: 'user_management' })
@@ -511,19 +513,7 @@ export default function UserManagementPage() {
       }
       toast.success(approveAsTeamLeader ? 'User approved as team leader' : 'User approved')
       if (data.email_sent === false && data.email_error) {
-        const err = data.email_error as string
-        const isResendRestriction =
-          /only send testing emails to your own email|verify a domain at resend/i.test(err)
-        if (isResendRestriction) {
-          toast.error(
-            'User was approved but they did not receive an email. To send approval emails to anyone: verify your domain at resend.com/domains and set RESEND_FROM_EMAIL in Vercel (e.g. Formula IHU Hub <noreply@fihu.gr>), then redeploy.',
-            { duration: 10000 }
-          )
-        } else {
-          toast.error(`Approval email could not be sent: ${err}. Set RESEND_API_KEY in Vercel for notification emails.`, { duration: 6000 })
-        }
-      } else if (data.email_sent === false) {
-        toast.error('Approval email could not be sent. Set RESEND_API_KEY in Vercel (Settings → Environment Variables) for notification emails.', { duration: 5000 })
+        logger.warn('Approval email could not be sent', { error: data.email_error })
       }
       await loadData(true)
     } catch (e) {
@@ -550,16 +540,7 @@ export default function UserManagementPage() {
       if (data.email_sent) {
         toast.success('Approval email sent.')
       } else if (data.email_error) {
-        const err = data.email_error as string
-        const isResendRestriction = /only send testing emails to your own email|verify a domain at resend/i.test(err)
-        if (isResendRestriction) {
-          toast.error(
-            'To send approval emails: verify your domain at resend.com/domains and set RESEND_FROM_EMAIL in Vercel (e.g. Formula IHU Hub <noreply@fihu.gr>), then redeploy.',
-            { duration: 10000 }
-          )
-        } else {
-          toast.error(`Email could not be sent: ${err}`, { duration: 6000 })
-        }
+        logger.warn('Approval email could not be sent', { error: data.email_error })
       }
     } catch {
       toast.error('Failed to resend approval email')
@@ -600,6 +581,37 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleBulkApprove = async () => {
+    if (userRole !== 'admin') return
+    const pendingUsers = users.filter((u) => u.login_approved === false)
+    if (pendingUsers.length === 0) {
+      toast.error('No pending users to approve')
+      return
+    }
+    const confirmApprove = window.confirm(`Are you sure you want to approve ${pendingUsers.length} users?`)
+    if (!confirmApprove) return
+    
+    setRefreshing(true)
+    let successCount = 0
+    let failCount = 0
+    for (const u of pendingUsers) {
+      try {
+        const res = await fetch('/api/admin/approve-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: u.id, loginApproved: true }),
+        })
+        if (res.ok) successCount++
+        else failCount++
+      } catch {
+        failCount++
+      }
+    }
+    
+    toast.success(`Bulk approval complete. ${successCount} approved, ${failCount} failed.`)
+    await loadData(true)
+  }
+
   const SortIcon = ({ column }: { column: SortOption }) => {
     if (sortBy !== column) return null
     return sortDirection === 'asc' ? (
@@ -630,117 +642,90 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-4 animate-fade-in min-h-screen">
-      {/* Header + toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="p-4 sm:p-6 md:p-8 max-w-7xl mx-auto space-y-6 bg-slate-50/50 min-h-screen animate-fade-in">
+      <div className="flex items-center gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <Users className="w-6 h-6 text-indigo-600" />
+        </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Users className="w-6 h-6 text-primary" />
-            User Management
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-1">
+            Personnel <span className="bg-gradient-to-r from-indigo-500 to-cyan-500 bg-clip-text text-transparent">Registry</span>
           </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {userRole === 'admin' ? 'All users' : 'Your team and pending approvals'}
+          <p className="text-gray-400 font-bold uppercase text-[9px] tracking-[0.3em] leading-none">
+            {userRole === 'admin' ? 'Strategic Oversight & Access Control' : 'Team Member Matrix'}
           </p>
         </div>
-        {userRole === 'admin' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[140px] sm:max-w-[200px]">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 h-9 text-sm"
-              />
-            </div>
+      </div>
+
+      {userRole === 'admin' && (
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-white/50 backdrop-blur-md rounded-2xl border border-gray-100 shadow-sm relative z-10">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="Search by name, email, or role..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 h-11 bg-white border-gray-200 rounded-xl focus:ring-indigo-500/20"
+            />
+          </div>
+          <div className="flex items-center gap-2">
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="h-9 w-[130px]">
-                <SelectValue placeholder="Role" />
+              <SelectTrigger className="h-11 w-[140px] rounded-xl border-gray-200">
+                <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All roles</SelectItem>
+                <SelectItem value="all">All Roles</SelectItem>
                 {getAvailableRoles().map((role) => (
-                  <SelectItem key={role.value} value={role.value}>
-                    {role.label}
-                  </SelectItem>
+                  <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="h-9 w-[120px]">
-                <SelectValue placeholder="Team" />
+              <SelectTrigger className="h-11 w-[140px] rounded-xl border-gray-200">
+                <SelectValue placeholder="All Teams" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All teams</SelectItem>
+                <SelectItem value="all">All Teams</SelectItem>
                 {teams.map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name} ({team.code})
-                  </SelectItem>
+                  <SelectItem key={team.id} value={team.id}>{team.code}</SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-            <Select value={approvalFilter} onValueChange={setApprovalFilter}>
-              <SelectTrigger className="h-9 w-[120px]">
-                <SelectValue placeholder="Login" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={`${sortBy}-${sortDirection}`} onValueChange={(value) => {
-              const [col, dir] = value.split('-')
-              setSortBy(col as SortOption)
-              setSortDirection(dir as SortDirection)
-            }}>
-              <SelectTrigger className="h-9 w-[130px]">
-                <SelectValue placeholder="Sort" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name-asc">Name A–Z</SelectItem>
-                <SelectItem value="name-desc">Name Z–A</SelectItem>
-                <SelectItem value="email-asc">Email A–Z</SelectItem>
-                <SelectItem value="email-desc">Email Z–A</SelectItem>
-                <SelectItem value="created_at-desc">Newest</SelectItem>
-                <SelectItem value="created_at-asc">Oldest</SelectItem>
               </SelectContent>
             </Select>
             <Button
               onClick={() => loadData(true)}
               disabled={refreshing || loading}
               variant="outline"
-              size="sm"
-              className="h-9 gap-1.5"
+              size="icon"
+              className="h-11 w-11 rounded-xl border-gray-200"
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
+            </Button>
+            <Button
+              onClick={handleBulkApprove}
+              disabled={refreshing || loading}
+              className="h-11 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold gap-2"
+            >
+              <UserCheck className="w-4 h-4" />
+              Approve Pending ({users.filter(u => u.login_approved === false).length})
             </Button>
           </div>
-        ) : (
-          <Button
-            onClick={() => loadData(true)}
-            disabled={refreshing || loading}
-            variant="outline"
-            size="sm"
-            className="h-9 gap-1.5"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Users Table */}
-      <Card className="border border-gray-200">
-        <CardHeader className="py-4">
-          <CardTitle className="text-base font-semibold">
+      <Card className="shadow-lg border-gray-200">
+        <CardHeader className="bg-gradient-to-r from-indigo-50 to-blue-50 border-b border-gray-200">
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
             {userRole === 'admin' ? (
-              <>All Users · {filteredAndSortedUsers.length}{users.length !== filteredAndSortedUsers.length && ` of ${users.length}`}</>
+              <>Central Node · {filteredAndSortedUsers.length} Entities</>
             ) : (
-              <>Team members · {filteredAndSortedUsers.length}</>
+              <>Team Roster · {filteredAndSortedUsers.length}</>
             )}
           </CardTitle>
+          <CardDescription>
+            System-wide personnel management
+          </CardDescription>
         </CardHeader>
         <CardContent className="pt-0 pb-6">
           {filteredAndSortedUsers.length === 0 ? (
@@ -799,79 +784,32 @@ export default function UserManagementPage() {
                     const roleInfo = getRoleInfo(user.app_role || '')
                     return (
                       <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50/50">
-                        <td className="py-3 px-3">
+                        <td className="py-2 px-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-xs">
                               {getInitials(user)}
                             </div>
                             <div>
-                              <p className="font-medium text-gray-900 text-sm">
+                              <p className="font-semibold text-gray-900 text-[13px] leading-tight">
                                 {user.first_name} {user.last_name}
                               </p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-[10px] text-gray-500 leading-none">
                                 {formatDate(user.created_at)}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-3 text-sm text-gray-600">
-                          {userRole === 'admin' && editingUserId === user.id ? (
-                            <Input
-                              type="email"
-                              value={editingEmail}
-                              onChange={(e) => setEditingEmail(e.target.value)}
-                              placeholder="email@example.com"
-                              className="w-48 text-sm"
-                            />
-                          ) : (
-                            user.email
-                          )}
+                        <td className="py-2 px-3 text-[13px] text-gray-600">
+                          {user.email}
                         </td>
-                        <td className="py-3 px-3">
-                          {editingUserId === user.id ? (
-                            <div className="flex items-center space-x-2">
-                              <Select
-                                value={editingRole}
-                                onValueChange={setEditingRole}
-                              >
-                                <SelectTrigger className="w-48">
-                                  <SelectValue placeholder="Select role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {getAvailableRoles().map((role) => (
-                                    <SelectItem key={role.value} value={role.value}>
-                                      {role.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          ) : (
-                            <Badge className={`${roleInfo.color} border text-xs`}>
-                              {roleInfo.label}
-                            </Badge>
-                          )}
+                        <td className="py-2 px-3">
+                          <Badge className={`${roleInfo.color} border text-[10px] py-0 h-5`}>
+                            {roleInfo.label}
+                          </Badge>
                         </td>
                         {userRole === 'admin' && (
                           <td className="py-3 px-3 text-sm text-gray-600">
-                            {editingUserId === user.id ? (
-                              <Select
-                                value={editingTeamId || 'none'}
-                                onValueChange={setEditingTeamId}
-                              >
-                                <SelectTrigger className="w-48">
-                                  <SelectValue placeholder="Select team" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">No team</SelectItem>
-                                  {teams.map((team) => (
-                                    <SelectItem key={team.id} value={team.id}>
-                                      {team.name} ({team.code})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : user.teams ? (
+                            {user.teams ? (
                               <span>{user.teams.code}</span>
                             ) : (
                               <span className="text-gray-400">—</span>
@@ -885,48 +823,10 @@ export default function UserManagementPage() {
                             ) : (
                               <span className="text-amber-600">Pending</span>
                             )}
-                            <span className="text-gray-300" aria-hidden>·</span>
-                            {user.email_confirmed_at ? (
-                              <span className="text-green-600">Confirmed</span>
-                            ) : (
-                              <span className="text-orange-600">Unconfirmed</span>
-                            )}
-                            {userRole === 'admin' && (
-                              <>
-                                <span className="text-gray-300" aria-hidden>·</span>
-                                {user.profile_completed ? (
-                                  <span className="text-green-600">Active</span>
-                                ) : (
-                                  <span className="text-orange-600">Incomplete</span>
-                                )}
-                              </>
-                            )}
                           </div>
                         </td>
                         <td className="py-3 px-3">
-                          {editingUserId === user.id ? (
-                            <div className="flex items-center gap-1.5">
-                              <Button
-                                size="sm"
-                                onClick={() => handleSaveRole(user.id)}
-                                disabled={saving === user.id}
-                                className="h-8 gap-1"
-                              >
-                                {saving === user.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                                Save
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={handleCancelEdit}
-                                disabled={saving === user.id}
-                                className="h-8 px-2"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <DropdownMenu>
+                          <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                   <MoreVertical className="w-4 h-4" />
@@ -992,7 +892,6 @@ export default function UserManagementPage() {
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          )}
                         </td>
                       </tr>
                     )
@@ -1003,6 +902,92 @@ export default function UserManagementPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit User dialog (opened from handleEditRole) */}
+      <Dialog open={editUserOpen} onOpenChange={(open) => {
+        if (!open) handleCancelEdit()
+      }}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit User Role & Team</DialogTitle>
+            <DialogDescription>
+              Make changes to the user's role and team assignment. Click save when you're done.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {userRole === 'admin' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={editingEmail}
+                  onChange={(e) => setEditingEmail(e.target.value)}
+                  className="col-span-3"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="role" className="text-right">
+                Role
+              </Label>
+              <div className="col-span-3">
+                <Select
+                  value={editingRole}
+                  onValueChange={setEditingRole}
+                >
+                  <SelectTrigger id="role" className="w-full">
+                    <SelectValue placeholder="Select role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getAvailableRoles().map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            {userRole === 'admin' && (
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="team" className="text-right">
+                  Team
+                </Label>
+                <div className="col-span-3">
+                  <Select
+                    value={editingTeamId || 'none'}
+                    onValueChange={setEditingTeamId}
+                  >
+                    <SelectTrigger id="team" className="w-full">
+                      <SelectValue placeholder="Select team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No team</SelectItem>
+                      {teams.map((team) => (
+                        <SelectItem key={team.id} value={team.id}>
+                          {team.name} ({team.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCancelEdit} disabled={!!saving}>
+              Cancel
+            </Button>
+            <Button onClick={() => handleSaveRole(editingUserId!)} disabled={!!saving || !editingUserId}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* User details dialog (opened from row actions) */}
       <Dialog open={userDetailsOpen} onOpenChange={(open) => {
