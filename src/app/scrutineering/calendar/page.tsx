@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { todayInEventTz } from '@/lib/utils/formatting'
+import { logger } from '@/lib/utils/logger'
 
 type InspectionType = {
   id: string
@@ -118,10 +119,13 @@ export default function ScrutineeringCalendarPage() {
       const connected = await ensureSupabaseConnection()
       if (!connected) throw new Error('Database connection offline')
 
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) throw new Error('Authentication required')
+
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('app_role, team_id')
-        .eq('id', (await supabase.auth.getUser()).data.user?.id)
+        .eq('id', user.id)
         .single()
       
       setTeamId(profile?.team_id || null)

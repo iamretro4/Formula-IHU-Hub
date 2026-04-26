@@ -360,11 +360,11 @@ export default function DashboardPage() {
     return uploadedFiles.find(f => f.document_key === docKey) || null;
   }
 
-  const canUpload = authUser && (
+  const canUpload = !!(authUser && (
     authProfile?.app_role === 'team_leader' || authProfile?.app_role === 'admin'
-  );
+  ));
 
-  const isTeamMember = authUser && authProfile?.app_role === 'team_member';
+  const isTeamMember = !!(authUser && authProfile?.app_role === 'team_member');
 
   // Team members can view the documents section (status + downloads) but not upload
   const canViewDocuments = canUpload || isTeamMember;

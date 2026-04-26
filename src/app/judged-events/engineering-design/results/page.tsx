@@ -40,9 +40,10 @@ export default function EngineeringDesignResultsPage() {
           .select(`
             team_id,
             total_score,
-            teams(id, name, code)
+            teams(id, name, code),
+            judged_event_bookings!inner(event_id)
           `)
-          .eq('event_id', 'engineering-design') // Assuming there's an event_id field
+          .eq('judged_event_bookings.event_id', 'engineering-design')
           .order('total_score', { ascending: false })
 
         if (error) throw error

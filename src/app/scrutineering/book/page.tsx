@@ -76,6 +76,8 @@ type InspectionTypeCard = {
   can_book: boolean
   passed: boolean
   subtitle?: string
+  ev_prerequisites?: string[] | null
+  cv_prerequisites?: string[] | null
 }
 
 type Team = {
@@ -251,6 +253,7 @@ export default function ScrutineeringBookPage() {
           prerequisites: classPrereqs,
           key: t.key,
           passed: !!passed,
+          active: !!t.active,
           can_book: (userRole === 'admin' || userRole === 'scrutineer') 
             ? !!t.active && !hasActiveBooking
             : !!t.active && prerequisitesMet && !passed && !hasActiveBooking,
@@ -270,7 +273,7 @@ export default function ScrutineeringBookPage() {
       }).filter(Boolean)
 
       if (active && runId === effectRunIdRef.current) {
-        setInspectionTypes(processedTypes)
+        setInspectionTypes(processedTypes as any[])
         setInitialLoading(false)
       }
     } catch (err) {

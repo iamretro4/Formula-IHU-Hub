@@ -77,41 +77,42 @@ export function CreateTeamModal({ isOpen, onClose }: CreateTeamModalProps) {
         </div>
 
         <div>
-          <label className="form-label">Country</label>
+          <label className="form-label">University *</label>
           <input
             type="text"
-            {...register('country')}
+            {...register('university')}
             className="form-input"
-            placeholder="Enter country"
+            placeholder="Enter university name"
           />
-          {errors.country && (
-            <p className="text-sm text-red-600 mt-1">{errors.country.message}</p>
+          {errors.university && (
+            <p className="text-sm text-red-600 mt-1">{errors.university.message}</p>
           )}
         </div>
 
         <div>
-          <label className="form-label">Contact Email *</label>
-          <input
-            type="email"
-            {...register('contactEmail')}
+          <label className="form-label">Vehicle Class *</label>
+          <select
+            {...register('vehicle_class')}
             className="form-input"
-            placeholder="team@example.com"
-          />
-          {errors.contactEmail && (
-            <p className="text-sm text-red-600 mt-1">{errors.contactEmail.message}</p>
+          >
+            <option value="EV">Electric Vehicle (EV)</option>
+            <option value="CV">Combustion Vehicle (CV)</option>
+          </select>
+          {errors.vehicle_class && (
+            <p className="text-sm text-red-600 mt-1">{errors.vehicle_class.message}</p>
           )}
         </div>
 
         <div>
-          <label className="form-label">Contact Phone</label>
+          <label className="form-label">Vehicle Number</label>
           <input
-            type="tel"
-            {...register('contactPhone')}
+            type="number"
+            {...register('vehicle_number', { valueAsNumber: true })}
             className="form-input"
-            placeholder="+1 (555) 123-4567"
+            placeholder="Enter vehicle number"
           />
-          {errors.contactPhone && (
-            <p className="text-sm text-red-600 mt-1">{errors.contactPhone.message}</p>
+          {errors.vehicle_number && (
+            <p className="text-sm text-red-600 mt-1">{errors.vehicle_number.message}</p>
           )}
         </div>
 

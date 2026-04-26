@@ -38,6 +38,7 @@ import toast from 'react-hot-toast'
 type Team = {
   name: string
   code: string
+  vehicle_class?: string
 }
 
 type InspectionType = {
@@ -57,11 +58,13 @@ type Booking = {
   start_time: string
   end_time: string
   status: string
+  notes?: string
   started_at?: string
   completed_at?: string
   inspection_types?: {
     name: string
     duration_minutes: number
+    key: string
   } | null
   teams?: Team | null
   inspection_results?: InspectionResult[] | null
@@ -199,7 +202,7 @@ export default function ChecklistBookingPage({ params, searchParams }: PageProps
         // Booking & base info
         const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
-          .select(`*, inspection_types(name, duration_minutes), teams(name, code, vehicle_class), inspection_results(status, completed_at)`)
+          .select(`*, inspection_types(name, duration_minutes, key), teams(name, code, vehicle_class), inspection_results(status, completed_at)`)
           .eq('id', bookingId)
           .single()
         if (bookingError) throw bookingError

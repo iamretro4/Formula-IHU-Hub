@@ -94,7 +94,7 @@ export default function SafetyDashboardPage() {
           description,
           teams:team_id (code, name)
         `)
-        .eq('incident_type', 'Safety')
+        .eq('incident_type', 'Safety' as any)
         .gte('occurred_at', since.toISOString())
         .order('occurred_at', { ascending: false })
       

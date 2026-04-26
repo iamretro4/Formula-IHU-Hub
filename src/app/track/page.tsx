@@ -440,7 +440,7 @@ export default function TrackLivePage() {
                 onClick={async () => {
                   setIsCalculating(true)
                   try {
-                    const { error } = await supabase.rpc('calculate_dynamic_results', { p_event_type: activeTab })
+                    const { error } = await supabase.rpc('calculate_dynamic_results' as any, { p_event_type: activeTab })
                     if (error) throw error
                     toast.success('Scoring updated!')
                     await fetchAll()

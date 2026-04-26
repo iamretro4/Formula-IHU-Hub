@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
-    const country = searchParams.get('country')
 
     let query = supabase
       .from('teams')
@@ -40,10 +39,6 @@ export async function GET(request: NextRequest) {
     // Apply filters
     if (search) {
       query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
-    }
-
-    if (country) {
-      query = query.eq('country', country)
     }
 
     // Team users can only see their own teams
@@ -103,13 +98,13 @@ export async function POST(request: NextRequest) {
     const validatedData = teamSchema.parse(body)
 
     // Generate code from team name (first 3 letters uppercase)
-    const teamCode = validatedData.name.substring(0, 3).toUpperCase()
+    const teamCode = validatedData.name.substring(0, 3).toUpperCase() + (validatedData.vehicle_number || '')
 
     // Check if team name or code already exists
     const { data: existingTeam } = await supabase
       .from('teams')
       .select('id')
-      .or(`name.eq.${validatedData.name},code.eq.${teamCode}`)
+      .or(`name.eq."${validatedData.name}",code.eq."${teamCode}"`)
       .single()
 
     if (existingTeam) {
@@ -124,9 +119,9 @@ export async function POST(request: NextRequest) {
       .insert({
         name: validatedData.name,
         code: teamCode,
-        country: validatedData.country || null,
-        contact_email: validatedData.contactEmail,
-        contact_phone: validatedData.contactPhone || null,
+        university: validatedData.university,
+        vehicle_class: validatedData.vehicle_class,
+        vehicle_number: validatedData.vehicle_number || null,
       } as any)
       .select()
       .single()

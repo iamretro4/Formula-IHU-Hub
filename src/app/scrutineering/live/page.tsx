@@ -78,10 +78,12 @@ const TYPE_STYLES: Record<string, { accent: string; gradient: string; glow: stri
 type Team = {
   name: string
   code: string
+  vehicle_class?: string
 }
 
 type InspectionType = {
   name: string
+  duration_minutes: number
 }
 
 type InspectionResult = {
@@ -101,6 +103,7 @@ type Booking = {
   resource_index: number
   status: string
   notes?: string
+  started_at?: string
   is_rescrutineering: boolean
   created_by: string
   teams?: Team | null

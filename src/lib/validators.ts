@@ -34,9 +34,9 @@ export const signInSchema = z.object({
 // Team validation schemas
 export const teamSchema = z.object({
   name: z.string().min(2, 'Team name must be at least 2 characters'),
-  country: z.string().optional(),
-  contactEmail: z.string().email('Invalid email address'),
-  contactPhone: z.string().optional(),
+  university: z.string().min(2, 'University name is required'),
+  vehicle_class: z.enum(['EV', 'CV']),
+  vehicle_number: z.number().int().positive().optional(),
 })
 
 // Vehicle validation schemas
