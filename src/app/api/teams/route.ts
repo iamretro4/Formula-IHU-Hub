@@ -31,7 +31,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
-    const status = searchParams.get('status')
     const country = searchParams.get('country')
 
     let query = supabase
@@ -41,10 +40,6 @@ export async function GET(request: NextRequest) {
     // Apply filters
     if (search) {
       query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%`)
-    }
-
-    if (status) {
-      query = query.eq('status', status)
     }
 
     if (country) {
